@@ -1,0 +1,295 @@
+/* ═════════════════════════════════════════════════════════════════════════════
+   LIQUID AUTH STYLES
+   Efeitos dinâmicos e fluidos para a tela de autenticação
+   ═════════════════════════════════════════════════════════════════════════════ */
+
+/* Animated gradient background */
+@keyframes liquidGradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes floatBlob {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  25% {
+    transform: translate(20px, -20px) scale(1.05);
+  }
+  50% {
+    transform: translate(-15px, 15px) scale(0.98);
+  }
+  75% {
+    transform: translate(25px, 10px) scale(1.02);
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.2);
+  }
+  50% {
+    box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.25);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+/* Dynamic container with liquid morphing */
+#dynamic-container {
+  animation: pulseGlow 4s ease-in-out infinite;
+  position: relative;
+  backdrop-filter: blur(10px);
+}
+
+/* Liquid morphing on content change */
+#dynamic-content {
+  position: relative;
+}
+
+#dynamic-content > * {
+  animation: fadeInUp 0.6s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+    filter: blur(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+/* Form fields cascade animation */
+form .space-y-4 > * {
+  animation: slideIn 0.5s cubic-bezier(0.32, 0.72, 0, 1) backwards;
+}
+
+form .space-y-4 > *:nth-child(1) { animation-delay: 0.15s; }
+form .space-y-4 > *:nth-child(2) { animation-delay: 0.2s; }
+form .space-y-4 > *:nth-child(3) { animation-delay: 0.25s; }
+form .space-y-4 > *:nth-child(4) { animation-delay: 0.3s; }
+form .space-y-4 > *:nth-child(5) { animation-delay: 0.35s; }
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px) scaleX(0.9);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scaleX(1);
+    filter: blur(0);
+  }
+}
+
+/* Button hover liquid effect */
+button[type="submit"] {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+button[type="submit"]::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+button[type="submit"]:hover::before {
+  left: 100%;
+}
+
+/* Input focus liquid glow */
+input:not([type="checkbox"]):not([type="radio"]),
+textarea,
+select {
+  position: relative;
+  transition: all 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+input:focus:not([type="checkbox"]):not([type="radio"]),
+textarea:focus,
+select:focus {
+  box-shadow: 0 0 0 1px rgba(217, 119, 87, 0.3);
+}
+
+/* Checkbox liquid morph */
+input[type="checkbox"] {
+  transition: all 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+input[type="checkbox"]:checked {
+  animation: checkBounce 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+@keyframes checkBounce {
+  0% { transform: scale(0.8) rotate(-10deg); }
+  50% { transform: scale(1.15) rotate(5deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+
+/* Text styling - remove gradient background */
+h2 {
+  color: var(--color-text);
+  letter-spacing: -0.02em;
+}
+
+/* Link hover effect */
+a {
+  position: relative;
+  transition: color 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Remove backdrop glow - keep it minimal */
+#dynamic-container::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: none;
+}
+
+/* Grid form animations */
+.grid {
+  animation: fadeInUp 0.6s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+
+.grid > * {
+  animation: scaleInUp 0.5s cubic-bezier(0.32, 0.72, 0, 1) backwards;
+}
+
+.grid > *:nth-child(1) { animation-delay: 0.2s; }
+.grid > *:nth-child(2) { animation-delay: 0.25s; }
+.grid > *:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes scaleInUp {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+    filter: blur(5px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0);
+  }
+}
+
+/* Back button liquid effect */
+#prev-step {
+  transition: all 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+#prev-step:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+  border-color: rgba(217, 119, 87, 0.3);
+  transform: translateX(-2px);
+}
+
+#prev-step:active {
+  transform: scale(0.97) translateX(-2px);
+}
+
+/* Logo entrance animation */
+img[alt="Logo"] {
+  animation: logoPop 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+@keyframes logoPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.3) rotate(-45deg);
+  }
+  50% {
+    transform: scale(1.1) rotate(5deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+/* Copyright text subtle animation */
+p {
+  animation: fadeInSlow 1.5s ease-out forwards;
+}
+
+@keyframes fadeInSlow {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 640px) {
+  #dynamic-container {
+    border-radius: 20px;
+  }
+
+  form .space-y-4 > * {
+    animation: slideInMobile 0.4s cubic-bezier(0.32, 0.72, 0, 1) backwards;
+  }
+
+  @keyframes slideInMobile {
+    from {
+      opacity: 0;
+      transform: translateY(15px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+/* Dark mode enhancements */
+html[data-theme="dark"] #dynamic-container {
+  background: rgba(20, 20, 20, 0.8);
+  border-color: rgba(43, 43, 43, 0.6);
+}
+
+html[data-theme="dark"] a:hover {
+  color: #D97757;
+}
+
+/* Light mode enhancements */
+html[data-theme="light"] #dynamic-container {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+html[data-theme="light"] h2 {
+  color: #000000;
+}
+
+html[data-theme="light"] p {
+  color: rgba(0, 0, 0, 0.5);
+}

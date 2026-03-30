@@ -1,0 +1,457 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;700&display=swap');
+
+@theme {
+  --color-background: #0C0C0C;
+  --color-geist-background: #000000;
+  --color-gray-1000: #EDEDED;
+  --color-contrast-fg: #FFFFFF;
+  --shadow-menu: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --color-gray-100: #1A1A1A;
+}
+
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: dark;
+
+  /* Theme Variables - Dark Mode (default) */
+  --color-background: #0C0C0C;
+  --color-surface: #111111;
+  --color-surface-hover: #1A1A1A;
+  --color-text: #FFFFFF;
+  --color-text-secondary: #9CA3AF;
+  --color-border: rgba(255, 255, 255, 0.07);
+  --color-border-light: rgba(255, 255, 255, 0.04);
+  --shadow-menu: 0 32px 64px rgba(0, 0, 0, 0.6), 0 0 0 0.5px rgba(255, 255, 255, 0.04);
+
+  /* Dropdown Variables - Dark Mode */
+  --dropdown-bg: #111111;
+  --dropdown-bg-alpha: #111111;
+  --dropdown-border: rgba(255, 255, 255, 0.07);
+  --dropdown-glow: rgba(255, 255, 255, 0.12);
+  --dropdown-shadow: 0 32px 64px rgba(0, 0, 0, 0.6), 0 0 0 0.5px rgba(255, 255, 255, 0.04);
+  --dropdown-divider: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.07) 30%, rgba(255, 255, 255, 0.07) 70%, transparent);
+
+  /* Input Variables - Dark Mode */
+  --color-input-bg: #161616;
+  --color-input-border: #1C1C1C;
+  --color-input-text: #E5E7EB;
+  --color-input-placeholder: #6B7280;
+}
+
+/* Light Mode Theme */
+html[data-theme="light"] {
+  --color-background: #FFFFFF;
+  --color-surface: #F5F5F5;
+  --color-surface-hover: #EFEFEF;
+  --color-text: #000000;
+  --color-text-secondary: #666666;
+  --color-border: rgba(0, 0, 0, 0.12);
+  --color-border-light: rgba(0, 0, 0, 0.06);
+  --shadow-menu: 0 32px 64px rgba(0, 0, 0, 0.15), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
+
+  /* Dropdown Variables - Light Mode */
+  --dropdown-bg: #FAFAFA;
+  --dropdown-bg-alpha: #FAFAFA;
+  --dropdown-border: #EEEEEE;
+  --dropdown-glow: rgba(0, 0, 0, 0.08);
+  --dropdown-shadow: 0 32px 64px rgba(0, 0, 0, 0.15), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
+  --dropdown-divider: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.08) 30%, rgba(0, 0, 0, 0.08) 70%, transparent);
+
+  /* Ícone de olho (senha) no tema claro */
+  html[data-theme="light"] .eye-lottie {
+    filter: brightness(0) invert(0) !important;
+    opacity: 0.6 !important;
+  }
+
+  html[data-theme="light"] .eye-lottie:hover {
+    opacity: 1 !important;
+  }
+
+  /* Input Variables - Light Mode */
+  --color-input-bg: #F5F5F5;
+  --color-input-border: #EEEEEE;
+  --color-input-text: #000000;
+  --color-input-placeholder: #6B7280;
+}
+
+/* Force input styles for Light Mode to ensure override */
+html[data-theme="light"] input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]),
+html[data-theme="light"] textarea,
+html[data-theme="light"] select {
+  background-color: var(--color-input-bg) !important;
+  border-color: var(--color-input-border) !important;
+  color: var(--color-input-text) !important;
+}
+
+html[data-theme="light"] input::placeholder,
+html[data-theme="light"] textarea::placeholder {
+  color: var(--color-input-placeholder) !important;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100%;
+  background-color: var(--color-background);
+  color: var(--color-text);
+  position: relative;
+  overflow-x: hidden;
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+@media (max-width: 768px) {
+  :root {
+    --header-height: 60px;
+  }
+}
+
+.mobile-only {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-only {
+    display: block;
+  }
+  .desktop-only {
+    display: none;
+  }
+}
+
+.responsive-grid {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 1.25rem;
+}
+
+@media (min-width: 1024px) {
+  .responsive-grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+}
+
+@keyframes glow-fade-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-30px) scale(0.85);
+  }
+
+  to {
+    opacity: 0.85;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+#app {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background-color: var(--color-background);
+}
+
+.morph-card {
+  view-transition-name: morph-card;
+}
+
+/* Container morph com efeito Spring elástico parecido com Framer Motion / Apple */
+::view-transition-group(morph-card) {
+  animation: 0.7s cubic-bezier(0.32, 0.72, 0, 1) both morph-shape;
+}
+
+::view-transition-old(morph-card) {
+  animation: 0.2s cubic-bezier(0.4, 0, 1, 1) both fade-out;
+}
+
+::view-transition-new(morph-card) {
+  animation: 0.4s cubic-bezier(0, 0, 0.2, 1) 0.15s both fade-in;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    filter: blur(4px);
+    transform: translateY(10px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fade-out {
+  from {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    filter: blur(4px);
+    transform: translateY(-10px) scale(0.96);
+  }
+}
+
+@keyframes morph-shape {
+  0% {
+    /* View Transitions interpola automaticamente a geometria e bounding box! */
+  }
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Dropdown Theme-Aware Styles
+   ──────────────────────────────────────────────────────────────────────────── */
+
+#user-dropdown-menu,
+#nav-shared-dropdown,
+.dropdown-menu-container {
+  transition:
+    background-color 0.4s ease,
+    border-color 0.4s ease,
+    box-shadow 0.4s ease;
+}
+
+/* Dark mode dropdown */
+#user-dropdown-menu,
+#nav-shared-dropdown,
+.dropdown-menu-container {
+  background-color: var(--dropdown-bg);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 0 32px 64px rgba(0, 0, 0, 0.6), 0 0 0 0.5px rgba(255, 255, 255, 0.04);
+}
+
+/* Light mode dropdown */
+html[data-theme="light"] #user-dropdown-menu,
+html[data-theme="light"] #nav-shared-dropdown,
+html[data-theme="light"] .dropdown-menu-container {
+  background-color: #FAFAFA;
+  border-color: #EEEEEE;
+  box-shadow: 0 32px 64px rgba(0, 0, 0, 0.15), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
+}
+
+.dropdown-item {
+  transition:
+    color 0.3s ease,
+    background-color 0.3s ease;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.dropdown-item:hover {
+  color: #FFFFFF;
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Light mode dropdown items */
+html[data-theme="light"] .dropdown-item {
+  color: #000000;
+}
+
+html[data-theme="light"] .dropdown-item:hover {
+  color: #000000;
+}
+
+/* Light mode dropdown dividers */
+html[data-theme="light"] .dropdown-divider {
+  background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.08) 30%, rgba(0, 0, 0, 0.08) 70%, transparent);
+}
+
+.dropdown-item:focus-visible {
+  --tw-ring-color: rgba(255, 255, 255, 0.2);
+}
+
+html[data-theme="light"] .dropdown-item {
+  color: #000000 !important;
+  background-color: transparent !important;
+}
+
+html[data-theme="light"] .dropdown-item:hover {
+  background-color: rgba(0, 0, 0, 0.08) !important;
+  color: #000000 !important;
+}
+
+html[data-theme="light"] .dropdown-item:focus-visible {
+  --tw-ring-color: rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Ícones no tema claro */
+html[data-theme="light"] .dropdown-item .group-hover\:text-white\/80 {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+html[data-theme="light"] .dropdown-item:hover .group-hover\:text-white\/80 {
+  color: rgba(0, 0, 0, 0.8);
+}
+
+/* Fallback: todos os spans dentro de dropdown-item no tema claro */
+html[data-theme="light"] .dropdown-item span {
+  color: #000000;
+}
+
+html[data-theme="light"] .dropdown-item span[style*="opacity"] {
+  opacity: 0.6 !important;
+  color: rgba(0, 0, 0, 0.6) !important;
+}
+
+html[data-theme="light"] .dropdown-item:hover span[style*="opacity"] {
+  opacity: 1 !important;
+  color: rgba(0, 0, 0, 0.9) !important;
+}
+
+/* Explicitly target Theme Switcher label, icons and others in light mode */
+html[data-theme="light"] .theme-label,
+html[data-theme="light"] .theme-switcher span,
+html[data-theme="light"] .dropdown-item .font-medium,
+html[data-theme="light"] .dropdown-item svg,
+html[data-theme="light"] .theme-switcher svg {
+  color: #000000 !important;
+  stroke: #000000 !important;
+}
+
+html[data-theme="light"] .theme-icon,
+html[data-theme="light"] .dropdown-item span[style*="opacity"] {
+  color: #000000 !important;
+  opacity: 0.8 !important;
+}
+
+.dropdown-divider {
+  transition: background 0.4s ease;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.07) 30%, rgba(255, 255, 255, 0.07) 70%, transparent);
+}
+
+html[data-theme="light"] .dropdown-divider {
+  background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.12) 30%, rgba(0, 0, 0, 0.12) 70%, transparent) !important;
+}
+
+/* Theme Switcher specific styles */
+.theme-switcher {
+  transition: color 0.3s ease, background-color 0.3s ease;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+}
+
+.theme-switcher:hover {
+  color: var(--color-text);
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+html[data-theme="light"] .theme-switcher:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.theme-switch-container {
+  transition:
+    background-color 0.4s ease,
+    box-shadow 0.3s ease;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+html[data-theme="light"] .theme-switch-container {
+  background-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+.theme-switch-thumb {
+  transition:
+    background-color 0.3s ease,
+    box-shadow 0.3s ease;
+  background-color: white;
+}
+
+html[data-theme="light"] .theme-switch-thumb {
+  background-color: #000;
+}
+
+/* Toast Theme-Aware Styles */
+.toast-card {
+  transition:
+    background-color 0.4s ease,
+    border-color 0.4s ease,
+    color 0.4s ease,
+    box-shadow 0.4s ease,
+    transform 0.4s cubic-bezier(0.25, 0.75, 0.6, 0.98),
+    opacity 0.4s ease;
+  box-shadow: var(--shadow-menu);
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Utility to hide scrollbar */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+html[data-theme="light"] .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+}
+html[data-theme="light"] .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* Remove focus outline from Recharts */
+.recharts-wrapper, .recharts-surface, .recharts-sector, .recharts-curve, .recharts-dot {
+  outline: none !important;
+}
+
+svg:focus {
+  outline: none !important;
+}
+/* OverviewConfig Switch Toggle */
+.ov-switch {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.05);
+}
+.ov-switch .ov-switch-thumb {
+  left: 2px;
+  background: white;
+}
+.ov-toggle:checked + .ov-switch {
+  background: #D97757;
+  border-color: rgba(217, 119, 87, 0.5);
+}
+.ov-toggle:checked + .ov-switch .ov-switch-thumb {
+  left: 18px;
+}
+html[data-theme="light"] .ov-switch {
+  background: rgba(0, 0, 0, 0.08);
+  border-color: rgba(0, 0, 0, 0.05);
+}
+html[data-theme="light"] .ov-switch .ov-switch-thumb {
+  background: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+html[data-theme="light"] .ov-toggle:checked + .ov-switch .ov-switch-thumb {
+  background: white;
+}
