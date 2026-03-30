@@ -1255,8 +1255,7 @@ export function renderDashboard(user: any, tab?: string) {
         const d = new Date(t.date);
         return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
       }).map(t => {
-        const rawCat = (t.category || '').toLowerCase();
-        const displayName = categoryMap.get(rawCat) || t.category || 'Outros';
+        const displayName = getCategoryName(t, categoryMap);
         return { ...t, category: displayName };
       });
 

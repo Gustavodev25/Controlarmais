@@ -175,19 +175,13 @@ export function openDetailedClosingDateModal({
         Defina o dia exato do fechamento para as faturas abaixo.
       </div>
 
-      <div class="closing-modal-bank-copy" style="margin-bottom: 20px;">
+      <div class="closing-modal-bank-copy">
         ${buildBankInfoCopy(bankName, originalCloseDate, originalDueDate)}
       </div>
 
-      <div class="closing-modal-list closing-modal-list--app">
+      <div class="closing-modal-list closing-modal-list--minimal">
         ${orderedBills.map(({ bill, label }, index) => `
           <div class="closing-modal-list-item ${index !== orderedBills.length - 1 ? 'has-divider' : ''}">
-            <div class="closing-modal-item-icon">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                <path d="M14 2v6h6"></path>
-              </svg>
-            </div>
             <div class="closing-modal-copy">
               <span class="closing-modal-label">${label}</span>
               <span class="closing-modal-sublabel">${formatMonthKey(bill.referenceMonth)} • fechamento atual ${formatDateLabel(bill.closeDate)}</span>
@@ -196,13 +190,13 @@ export function openDetailedClosingDateModal({
               <span class="closing-modal-day-label">Dia</span>
               <input
                 id="close-day-${bill.typeKey}"
-                class="closing-modal-input closing-modal-input--day"
+                class="closing-modal-input-minimal"
                 type="text"
                 inputmode="numeric"
                 pattern="[0-9]*"
                 maxlength="2"
                 value="${resolveInputDay(bill, suggestedDay, closingDateSettings)}"
-                placeholder="25"
+                placeholder="--"
               />
             </div>
           </div>

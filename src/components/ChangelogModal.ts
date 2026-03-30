@@ -795,7 +795,7 @@ export function showChangelogNotification(
     </div>`;
 
   document.body.insertAdjacentHTML('beforeend', `
-    <div id="${id}-wrapper" style="position:fixed;bottom:24px;right:24px;z-index:9998;pointer-events:none;">
+    <div id="${id}-wrapper" style="position:fixed;bottom:24px;right:24px;z-index:10000;pointer-events:none;">
       ${DynamicIsland({
         id,
         content: inner,

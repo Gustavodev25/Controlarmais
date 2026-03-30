@@ -186,36 +186,35 @@ onAuthStateChanged(auth, async (user) => {
           const savedTab = sessionStorage.getItem('currentTab');
 
           if (savedPage === 'settings') {
-            renderSettings(user, (savedTab as any) || undefined);
+            renderSettings(currentUser, (savedTab as any) || undefined);
           } else if (savedPage === 'connected-banks') {
-            renderConnectedBanks(user);
+            renderConnectedBanks(currentUser);
           } else if (savedPage === 'credit-cards') {
-            renderCreditCards(user);
+            renderCreditCards(currentUser);
           } else if (savedPage === 'categories') {
-            renderCategories(user);
+            renderCategories(currentUser);
           } else if (savedPage === 'transactions') {
-            renderTransactions(user);
+            renderTransactions(currentUser);
           } else if (savedPage === 'subscriptions') {
-            renderSubscriptions(user);
+            renderSubscriptions(currentUser);
           } else if (savedPage === 'reminders') {
-            renderReminders(user);
+            renderReminders(currentUser);
           } else if (savedPage === 'patrimony') {
-            renderPatrimony(user);
+            renderPatrimony(currentUser);
           } else if (savedPage === 'admin') {
-            renderAdmin({ ...user, ...userData });
+            renderAdmin(currentUser);
           } else if (savedPage === 'admin-subscriptions') {
-            renderAdminSubscriptions({ ...user, ...userData });
+            renderAdminSubscriptions(currentUser);
           } else if (savedPage === 'admin-abandoned-carts') {
-            renderAdminAbandonedCarts({ ...user, ...userData });
+            renderAdminAbandonedCarts(currentUser);
           } else if (savedPage === 'admin-updates') {
-            renderAdminUpdates({ ...user, ...userData });
+            renderAdminUpdates(currentUser);
           } else if (savedPage === 'admin-automation') {
-            renderAdminAutomation({ ...user, ...userData });
+            renderAdminAutomation(currentUser);
           } else if (savedPage === 'updates') {
-            renderUpdates(user);
+            renderUpdates(currentUser);
           } else {
-
-            renderDashboard(user, savedTab || undefined);
+            renderDashboard(currentUser, savedTab || undefined);
 
             const isProfileComplete = !!(userData.phone && userData.profile?.address?.cep);
             const isProfilePromoShown = sessionStorage.getItem(`profile_promo_shown_${user.uid}`) === 'true';

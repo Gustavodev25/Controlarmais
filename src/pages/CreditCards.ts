@@ -65,6 +65,7 @@ let currentVisibleCount = PAGE_SIZE;
 let currentFilteredRows: InvoiceTableRow[] = [];
 let infiniteScrollObserver: IntersectionObserver | null = null;
 let isLoadingMore = false;
+let currentUserIsAdmin = false;
 
 let ccCategoryMap: Map<string, string> = new Map(); // originalKey -> translated name
 
@@ -79,6 +80,8 @@ const PLUGGY_TO_CATEGORY_FALLBACK: Record<string, string> = {
   'bakeries': 'Padaria',
   'fast food': 'Fast Food',
   'coffee shops': 'Cafeteria',
+  'supermarket': 'Supermercado',
+  'market': 'Mercado',
   // Viagem
   'accommodation': 'Hospedagem',
   'airport and airlines': 'Passagens aéreas',
@@ -90,7 +93,10 @@ const PLUGGY_TO_CATEGORY_FALLBACK: Record<string, string> = {
   'credit card': 'Cartão de crédito',
   'credit card fees': 'Tarifas cartão',
   'income taxes': 'IR',
+  'interest charged': 'Juros',
   'interests charged': 'Juros',
+  'interest': 'Juros',
+  'finance charge': 'Encargo',
   'loans': 'Empréstimos',
   'taxes': 'Impostos',
   'wire transfer fees and atm fees': 'Tarifas bancárias',
@@ -102,6 +108,7 @@ const PLUGGY_TO_CATEGORY_FALLBACK: Record<string, string> = {
   'investments': 'Investimentos',
   'savings': 'Poupança',
   'overdraft': 'Cheque especial',
+  'installment': 'Parcelamento',
   // Transferências
   'bank slip': 'Boleto',
   'credit card payment': 'Pagamento cartão',
@@ -119,6 +126,7 @@ const PLUGGY_TO_CATEGORY_FALLBACK: Record<string, string> = {
   'deposit': 'Depósito',
   'withdrawal': 'Saque',
   'atm withdrawal': 'Saque caixa',
+  'bill payment': 'Pagamento',
   // Transporte
   'bicycle': 'Bicicleta',
   'car rental': 'Aluguel carro',
@@ -129,6 +137,8 @@ const PLUGGY_TO_CATEGORY_FALLBACK: Record<string, string> = {
   'vehicle maintenance': 'Manutenção',
   'toll': 'Pedágio',
   'tolls': 'Pedágio',
+  'auto': 'Automóvel',
+  'car': 'Carro',
   // Entretenimento
   'cinema, theater and concerts': 'Cinema / shows',
   'entertainment': 'Lazer',
@@ -139,6 +149,7 @@ const PLUGGY_TO_CATEGORY_FALLBACK: Record<string, string> = {
   'gaming': 'Jogos',
   'sports': 'Esportes',
   'books and magazines': 'Livros e revistas',
+  'hobby': 'Hobby',
   // Compras
   'clothing': 'Roupas',
   'electronics': 'Eletrônicos',
@@ -149,6 +160,9 @@ const PLUGGY_TO_CATEGORY_FALLBACK: Record<string, string> = {
   'gifts': 'Presentes',
   'beauty': 'Beleza',
   'cosmetics': 'Cosméticos',
+  'online': 'Online',
+  'department store': 'Loja de Depto.',
+  'home': 'Casa',
   // Moradia
   'rent': 'Aluguel',
   'condominium': 'Condomínio',
@@ -165,15 +179,21 @@ const PLUGGY_TO_CATEGORY_FALLBACK: Record<string, string> = {
   'health': 'Saúde',
   'health insurance': 'Plano de saúde',
   'pharmacy': 'Farmácia',
+  'drugstore': 'Farmácia',
   'medical': 'Médico',
   'dental': 'Dentista',
   'gym': 'Academia',
+  'gyms and fitness centers': 'Academia',
   'hospital': 'Hospital',
+  'clinics': 'Clínicas',
+  'labs': 'Exames',
+  'hospital clinics and labs': 'Hospital e Clínicas',
+  'wellness': 'Bem-estar',
+  'personal care': 'Cuidados Pessoais',
   // Educação
   'education': 'Educação',
   'school': 'Escola',
   'courses': 'Cursos',
-  'university': 'Universidade',
   // Seguros
   'insurance': 'Seguro',
   'life insurance': 'Seguro vida',
@@ -192,13 +212,35 @@ const PLUGGY_TO_CATEGORY_FALLBACK: Record<string, string> = {
   'alimony': 'Pensão',
   'benefit programs': 'Programas de benefícios',
   'digital services': 'Serviços digitais',
+  'telecommunications': 'Telecomunicação',
+  'mobile': 'Celular',
   'donation': 'Doações',
   'subscriptions': 'Assinaturas',
   'subscription': 'Assinatura',
+  'reversal': 'Estorno',
   'other': 'Outros',
   'others': 'Outros',
+  'n/a': 'Outros',
+  'housing': 'Moradia',
+  'automotive': 'Automotivo',
+  'university': 'Universidade',
+  'accomodation': 'Hospedagem',
   'uncategorized': 'Sem categoria',
 };
+
+/**
+ * Parses a date safely, handling Firestore Timestamps, YYYY-MM-DD strings (as local time),
+ * and ISO strings correctly without timezone shifts.
+ */
+function parseDateSafe(val: any): Date {
+  if (!val) return new Date();
+  if (typeof val.toDate === 'function') return val.toDate();
+  if (typeof val === 'string' && val.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    const [y, m, d] = val.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+  return new Date(val);
+}
 
 function getCcCategoryName(rawCategory: string): string {
   const key = (rawCategory || '').toLowerCase().trim();
@@ -243,7 +285,15 @@ function getInstallmentInfo(tx: any) {
 
 function getReleaseDate(tx: any): Date {
   const raw = tx.creditCardMetadata?.releaseDate || tx.date;
-  return raw?.toDate ? raw.toDate() : new Date(raw);
+  return parseDateSafe(raw);
+}
+
+function getFriendlyValue(raw: any) {
+  if (raw === null || raw === undefined) return '—';
+  if (typeof raw === 'object' && raw.seconds !== undefined) {
+    return parseDateSafe(raw).toLocaleString('pt-BR');
+  }
+  return String(raw);
 }
 
 function showPageOverlay(message: string) {
@@ -352,16 +402,7 @@ const FINANCE_CHARGE_LABELS: Record<string, string> = {
 
 function toTimeMs(value: any): number {
   if (!value) return 0;
-  if (value instanceof Date) {
-    return Number.isNaN(value.getTime()) ? 0 : value.getTime();
-  }
-
-  if (typeof value?.toDate === 'function') {
-    const converted = value.toDate();
-    return converted instanceof Date && !Number.isNaN(converted.getTime()) ? converted.getTime() : 0;
-  }
-
-  const parsed = new Date(value);
+  const parsed = parseDateSafe(value);
   return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
 }
 
@@ -588,6 +629,7 @@ function CreditCardsContent(): string {
 }
 
 export function renderCreditCards(user: any) {
+  currentUserIsAdmin = user?.isAdmin === true || sessionStorage.getItem('isAdminUser') === 'true';
   const app = document.querySelector<HTMLDivElement>('#app')!;
 
   sessionStorage.setItem('currentPage', 'credit-cards');
@@ -1369,6 +1411,13 @@ export function renderCreditCards(user: any) {
           padding: 16px;
           border-radius: 12px;
           border: 1px solid var(--color-border);
+          max-height: 440px;
+          overflow-y: auto;
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
+        .cc-json::-webkit-scrollbar {
+          display: none;
         }
         .lottie-dropdown-icon {
           filter: brightness(1.2) saturate(0.8);
@@ -1461,145 +1510,112 @@ export function renderCreditCards(user: any) {
           animation: spin 0.8s linear infinite;
         }
 
-        /* Manual Closing Date Modal Styles */
-        .closing-modal-list {
+        /* Manual Closing Date Modal Styles (Minimalist) */
+        .closing-modal-list--minimal {
           display: flex;
           flex-direction: column;
-          background: rgba(255,255,255,0.03);
-          border: 1px solid var(--color-border);
-          border-radius: 12px;
-          margin-top: 8px;
+          background: var(--color-surface-hover, rgba(255, 255, 255, 0.03));
+          border: 1px solid var(--color-border-light, rgba(255, 255, 255, 0.06));
+          border-radius: 18px;
+          margin-top: 12px;
+          overflow: hidden;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
         }
         .closing-modal-list-item {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding: 12px 16px;
+          padding: 16px 20px;
+          transition: background 0.2s ease;
+        }
+        .closing-modal-list-item:hover {
+          background: rgba(255, 255, 255, 0.03);
         }
         .closing-modal-list-item.has-divider {
-          border-bottom: 1px solid var(--color-border);
-        }
-        .closing-modal-label {
-          font-size: 13px;
-          font-weight: 500;
-          color: var(--color-text);
+          border-bottom: 1px solid var(--color-border-light);
         }
         .closing-modal-copy {
           display: flex;
           flex-direction: column;
-          gap: 4px;
+          gap: 2px;
           min-width: 0;
-          padding-right: 12px;
+        }
+        .closing-modal-label {
+          font-size: 14px;
+          font-weight: 600;
+          color: var(--color-text);
+          letter-spacing: -0.01em;
         }
         .closing-modal-sublabel {
           font-size: 11px;
           color: var(--color-text-secondary);
-        }
-
-        .closing-modal-input {
-          background: transparent;
-          border: 1px solid var(--color-border);
-          color: var(--color-text);
-          border-radius: 8px;
-          padding: 8px 12px;
-          width: 135px;
-          text-align: center;
-          font-size: 14px;
-          font-family: inherit;
-          outline: none;
-          cursor: text;
-          transition: all 0.2s ease;
-        }
-        .closing-modal-input:hover {
-          background: rgba(255, 255, 255, 0.03);
-          border-color: rgba(255, 255, 255, 0.15);
-        }
-        .closing-modal-input:focus {
-          border-color: #D97757;
-          background: rgba(217, 119, 87, 0.05);
-        }
-        .closing-modal-input::-webkit-calendar-picker-indicator {
-          filter: invert(0.6);
-          cursor: pointer;
-          opacity: 0.6;
-          transition: opacity 0.2s ease;
-        }
-        html[data-theme="light"] .closing-modal-input::-webkit-calendar-picker-indicator {
-          filter: invert(0);
-        }
-        .closing-modal-input::-webkit-calendar-picker-indicator:hover {
-          opacity: 1;
-        }
-        .closing-modal-lead {
-          font-size: 14px;
-          line-height: 1.55;
-          color: var(--color-text-secondary);
-          margin-bottom: 14px;
-        }
-        .closing-modal-list--app {
-          background: #1A1A1A;
-          border-color: #2A2A2A;
-          border-radius: 16px;
-          overflow: hidden;
-        }
-        .closing-modal-list--app .closing-modal-list-item {
-          gap: 12px;
-          padding: 14px 16px;
-          background: #1A1A1A;
-        }
-        .closing-modal-list--app .closing-modal-list-item.has-divider {
-          border-bottom-color: #2A2A2A;
-        }
-
-        .closing-modal-bank-copy {
-          color: var(--color-text-secondary);
-          font-size: 13px;
-          line-height: 1.55;
-        }
-        .closing-modal-bank-copy strong {
-          color: var(--color-text);
-          font-weight: 700;
+          opacity: 0.7;
         }
         .closing-modal-day-wrapper {
           display: flex;
           align-items: center;
-          gap: 8px;
+          gap: 12px;
           flex-shrink: 0;
         }
         .closing-modal-day-label {
-          font-size: 15px;
-          color: #909090;
+          font-size: 11px;
+          font-weight: 500;
+          color: var(--color-text-secondary);
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          opacity: 0.5;
         }
-        .closing-modal-input--day {
-          width: 54px;
-          min-width: 54px;
-          padding: 8px 10px;
-          text-align: right;
-          font-size: 16px;
-          font-weight: 700;
-          border-color: rgba(255, 255, 255, 0.08);
-          background: rgba(255, 255, 255, 0.03);
+        .closing-modal-input-minimal {
+          background: var(--color-surface-hover);
+          border: 1px solid var(--color-border);
+          color: var(--color-text);
+          border-radius: 10px;
+          width: 48px;
+          padding: 8px 0;
+          text-align: center;
+          font-size: 15px;
+          font-weight: 600;
+          outline: none;
+          transition: all 0.2s ease;
+        }
+        .closing-modal-input-minimal:hover {
+          border-color: var(--color-text-secondary);
+          background: rgba(255, 255, 255, 0.05);
+        }
+        .closing-modal-input-minimal:focus {
+          border-color: #D97757;
+          background: rgba(217, 119, 87, 0.08);
+          box-shadow: 0 0 0 3px rgba(217, 119, 87, 0.1);
+        }
+        .closing-modal-lead {
+          font-size: 14px;
+          line-height: 1.6;
+          color: var(--color-text-secondary);
+          margin-bottom: 16px;
+          padding: 0 4px;
+        }
+        .closing-modal-bank-copy {
+          color: var(--color-text-secondary);
+          font-size: 13px;
+          line-height: 1.6;
+          padding: 0 4px;
+          background: transparent;
+          border: none;
+          margin-bottom: 24px;
+        }
+        .closing-modal-bank-copy strong {
+          color: var(--color-text);
+          font-weight: 600;
         }
         @media (max-width: 480px) {
           .closing-modal-list-item {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 10px;
+            padding: 14px 16px;
           }
-          .closing-modal-copy {
-            padding-right: 0;
-          }
-          .closing-modal-input {
-            width: 100%;
-            box-sizing: border-box;
-          }
-          .closing-modal-day-wrapper {
-            width: 100%;
-            justify-content: space-between;
-          }
-          .closing-modal-input--day {
-            width: 72px;
-            min-width: 72px;
+          .closing-modal-label { font-size: 13px; }
+          .closing-modal-input-minimal {
+            width: 42px;
+            padding: 6px 0;
+            font-size: 14px;
           }
         }
         .closing-modal-footer {
@@ -1766,37 +1782,33 @@ export function renderCreditCards(user: any) {
             font-size: 11px;
             white-space: nowrap;
           }
-          /* td 2: Data lançamento → oculto no mobile */
+          /* td 2: Descrição → linha 1, col 1 */
           .cc-table tbody tr td:nth-child(2) {
-            display: none !important;
-          }
-          /* td 3: Descrição → linha 1, col 1 */
-          .cc-table tbody tr td:nth-child(3) {
             grid-column: 1;
             grid-row: 1;
           }
-          /* td 4: Categoria → linha 2, col 1 */
-          .cc-table tbody tr td:nth-child(4) {
+          /* td 3: Categoria → linha 2, col 1 */
+          .cc-table tbody tr td:nth-child(3) {
             grid-column: 1;
             grid-row: 2;
           }
-          /* td 5: Valor → linha 1, col 2 (alinhado à direita) */
-          .cc-table tbody tr td:nth-child(5) {
+          /* td 4: Valor → linha 1, col 2 (alinhado à direita) */
+          .cc-table tbody tr td:nth-child(4) {
             grid-column: 2;
             grid-row: 1;
             text-align: right;
             white-space: nowrap;
           }
-          /* td 6: Fatura → linha 2, col 2 */
-          .cc-table tbody tr td:nth-child(6) {
+          /* td 5: Fatura → linha 2, col 2 */
+          .cc-table tbody tr td:nth-child(5) {
             grid-column: 2;
             grid-row: 2;
             text-align: right;
             font-size: 11px;
             color: var(--color-text-secondary);
           }
-          /* td 7: Ações → linha 3, col 2 */
-          .cc-table tbody tr td:nth-child(7) {
+          /* td 6: Ações → linha 3, col 2 */
+          .cc-table tbody tr td:nth-child(6) {
             grid-column: 2;
             grid-row: 3;
             text-align: right;
@@ -2169,7 +2181,7 @@ function sortTransactionsByDate(txs: any[]): any[] {
       if (!d) return 0;
       if (d instanceof Date) return d.getTime();
       if (d?.toDate) return d.toDate().getTime();
-      return new Date(d).getTime();
+      return parseDateSafe(d).getTime();
     };
     return toMs(b.date) - toMs(a.date);
   });
@@ -2400,6 +2412,9 @@ function attachRowListeners(rows: InvoiceTableRow[], startIdx: number, endIdx: n
         document.getElementById(`tx-action-delete-${rtx.id}`)?.addEventListener('click', () => {
           showDeleteRefundModal(rtx);
         });
+        document.getElementById(`tx-action-detail-${rtx.id}`)?.addEventListener('click', () => {
+          (window as any).openTransactionDetail(rtx);
+        });
       }
 
       document.getElementById(`tx-action-detail-${tx.id}`)?.addEventListener('click', () => {
@@ -2497,7 +2512,7 @@ function loadMoreRows() {
     const sentinelRow = document.createElement('tr');
     sentinelRow.id = 'cc-load-more-sentinel';
     sentinelRow.innerHTML = `
-      <td colspan="7" style="border: none; padding: 0;">
+      <td colspan="6" style="border: none; padding: 0;">
         <div class="cc-load-more-sentinel">
           <div class="cc-load-spinner"></div>
           <span class="cc-load-text">Carregando mais transações...</span>
@@ -2511,7 +2526,7 @@ function loadMoreRows() {
   const infoRow = document.createElement('tr');
   infoRow.id = 'cc-pagination-info';
   infoRow.innerHTML = `
-    <td colspan="7" style="border: none; padding: 0;">
+    <td colspan="6" style="border: none; padding: 0;">
       <div class="cc-pagination-info">
         Exibindo ${nextCount} de ${totalRows} transações
       </div>
@@ -2661,7 +2676,7 @@ function renderFilteredTransactions(filter: string) {
 
   const sentinelHtml = hasMore ? `
     <tr id="cc-load-more-sentinel">
-      <td colspan="7" style="border: none; padding: 0;">
+      <td colspan="6" style="border: none; padding: 0;">
         <div class="cc-load-more-sentinel">
           <div class="cc-load-spinner"></div>
           <span class="cc-load-text">Carregando mais transações...</span>
@@ -2672,7 +2687,7 @@ function renderFilteredTransactions(filter: string) {
 
   const paginationInfoHtml = resultsFound ? `
     <tr id="cc-pagination-info">
-      <td colspan="7" style="border: none; padding: 0;">
+      <td colspan="6" style="border: none; padding: 0;">
         <div class="cc-pagination-info">
           Exibindo ${currentVisibleCount} de ${filteredRows.length} transações
         </div>
@@ -2706,7 +2721,6 @@ function renderFilteredTransactions(filter: string) {
                   <thead>
                       <tr>
                           <th style="width:130px;">Data</th>
-                          <th style="width:130px;">Lançamento</th>
                           <th>Descrição / Estabelecimento</th>
                           <th>Categoria</th>
                           <th>Valor</th>
@@ -2717,7 +2731,7 @@ function renderFilteredTransactions(filter: string) {
                   <tbody>
                       ${resultsFound ? visibleRows.map((row, idx) => renderInvoiceTableRow(row, cachedAccountsMap, currentFilteredRows, idx)).join('') : `
                         <tr>
-                          <td colspan="7" style="padding: 60px 0; border: none;">
+                          <td colspan="6" style="padding: 60px 0; border: none;">
                             ${EmptyState({
     title: 'Nenhum resultado encontrado',
     description: searchQuery.trim()
@@ -2786,9 +2800,8 @@ function renderInvoiceTableRow(row: InvoiceTableRow, accountsMap: Map<string, an
 function renderTransactionRow(tx: any, accountsMap: Map<string, any>, allRows?: InvoiceTableRow[], currentIndex?: number): string {
   const acc = accountsMap.get(tx.accountId) || {};
 
-  const purchaseDateStr = (tx.date?.toDate ? tx.date.toDate() : new Date(tx.date))
+  const purchaseDateStr = parseDateSafe(tx.date)
     .toLocaleDateString('pt-BR');
-  const releaseDate = getReleaseDate(tx).toLocaleDateString('pt-BR');
 
   const { instNumber, instTotal, purchaseAmount, isInstallment } = getInstallmentInfo(tx);
 
@@ -2871,6 +2884,10 @@ function renderTransactionRow(tx: any, accountsMap: Map<string, any>, allRows?: 
 
   const actionItems = [];
 
+  if (currentUserIsAdmin) {
+    actionItems.push({ id: `tx-action-detail-${tx.id}`, label: 'Ver JSON', icon: '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"></path><path d="M13 2v7h7"></path></svg>' });
+  }
+
   if (tx.isRefund) {
     actionItems.push({ id: `tx-action-delete-${tx.id}`, label: 'Excluir Reembolso', icon: '<svg width="14" height="14" class="text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>' });
   } else {
@@ -2881,7 +2898,7 @@ function renderTransactionRow(tx: any, accountsMap: Map<string, any>, allRows?: 
   // Banner "Estornado" — aparece acima da transação original quando há reembolso logo abaixo
   const estornadoBanner = hasRefundFollowing ? `
     <tr class="cc-row-estornado-banner">
-      <td colspan="7" style="position: relative;">
+      <td colspan="6" style="position: relative;">
         <div class="cc-estornado-badge relative" data-refund-id="${refundTxId}">
           <div class="cc-estornado-label">
             <lottie-player
@@ -2908,6 +2925,7 @@ function renderTransactionRow(tx: any, accountsMap: Map<string, any>, allRows?: 
             ${GenericDropdown({
       id: `dropdown-refund-${refundTxId}`,
       items: [
+        ...(currentUserIsAdmin ? [{ id: `tx-action-detail-${refundTxId}`, label: 'Ver JSON', icon: '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"></path><path d="M13 2v7h7"></path></svg>' }] : []),
         { id: `tx-action-delete-${refundTxId}`, label: 'Excluir Reembolso', icon: '<svg width="14" height="14" class="text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>' }
       ]
     })}
@@ -2935,9 +2953,6 @@ function renderTransactionRow(tx: any, accountsMap: Map<string, any>, allRows?: 
            </div>
         </div>
         ${purchaseDateStr}
-      </td>
-      <td style="color:var(--color-text-secondary);font-variant-numeric:tabular-nums;white-space:nowrap;">
-        ${releaseDate}
       </td>
       <td>
         <div style="display:flex;flex-direction:column;gap:2px;min-width:0;">
@@ -2997,9 +3012,6 @@ function renderFinanceChargeRow(row: FinanceChargeTableRow, accountsMap: Map<str
   return `
     <tr class="cc-row-charge">
       <td style="color:var(--color-text-secondary);font-variant-numeric:tabular-nums;white-space:nowrap;">
-        —
-      </td>
-      <td style="color:var(--color-text-secondary);font-variant-numeric:tabular-nums;white-space:nowrap;">
         ${releaseDate}
       </td>
       <td>
@@ -3040,7 +3052,9 @@ function renderFinanceChargeRow(row: FinanceChargeTableRow, accountsMap: Map<str
           </button>
           ${GenericDropdown({
       id: `charge-action-dropdown-${chargeIdStr}`,
-      items: []
+      items: currentUserIsAdmin ? [
+        { id: `charge-action-detail-${chargeIdStr}`, label: 'Ver JSON', icon: '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"></path><path d="M13 2v7h7"></path></svg>' }
+      ] : []
     })}
         </div>
       </td>
@@ -3093,12 +3107,12 @@ function updateSummaryCards() {
   if (lottieLastPlayer) {
     let isLastPaid = false;
     if (resolvedLastInvoice && resolvedLastInvoice.closeDate) {
-      const closeDateObj = new Date(resolvedLastInvoice.closeDate);
+      const closeDateObj = parseDateSafe(resolvedLastInvoice.closeDate);
       const minPaymentTime = new Date(closeDateObj.getFullYear(), closeDateObj.getMonth(), closeDateObj.getDate() - 7).getTime();
 
       const hasPayment = transactions.some(tx => {
         if (!billConstructor.isInvoicePayment(tx)) return false;
-        const txTime = (tx.date?.toDate ? tx.date.toDate() : new Date(tx.date)).getTime();
+        const txTime = parseDateSafe(tx.date).getTime();
         return txTime >= minPaymentTime;
       });
       isLastPaid = hasPayment || Number(resolvedLastInvoice.total || 0) <= 0;
@@ -3136,6 +3150,7 @@ function updateSummaryCards() {
 
   if (elLast) elLast.innerHTML = fmt(Number(resolvedLastInvoice?.total ?? sum(lastBillTxs)));
   if (elLastSub) elLastSub.textContent = `Fatura de ${resolvedLastInvoice?.name ?? selectedAccountLabel} - ${getInvoiceCountLabel(lastRows.length)}`;
+
 
   if (elHistorySub) elHistorySub.textContent = `${getInvoiceCountLabel(rows.length)} no cartao`;
 }
@@ -3400,15 +3415,37 @@ async function updateTransactionInvoice(
     showConfirm: false,
     showCancel: false,
     content: `
-  <div class="w-full">
-    <div class="mb-4 flex items-baseline gap-1">
-      <span class="text-[14px] font-medium text-[var(--color-text-secondary)]">R$</span>
-      <span class="text-[28px] font-bold text-[var(--color-text)] tracking-tight">${formatted}</span>
+  <div class="w-full relative">
+    <div class="mb-4 flex items-center justify-between">
+      <div class="flex items-baseline gap-1">
+        <span class="text-[14px] font-medium text-[var(--color-text-secondary)]">R$</span>
+        <span class="text-[28px] font-bold text-[var(--color-text)] tracking-tight">${formatted}</span>
+      </div>
+      <button id="btn-copy-json" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--color-surface-hover)] border border-[var(--color-border)] hover:bg-[var(--color-surface-active)] transition-all text-[11px] font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-text)] group">
+         <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg>
+         <span>Copiar JSON</span>
+      </button>
     </div>
     <pre class="cc-json">${jsonStr}</pre>
   </div>
     `
   });
+
+  const copyBtn = document.getElementById('btn-copy-json');
+  if (copyBtn) {
+    copyBtn.onclick = () => {
+      navigator.clipboard.writeText(jsonStr).then(() => {
+        const originalContent = copyBtn.innerHTML;
+        copyBtn.innerHTML = `
+          <svg class="w-3.5 h-3.5 text-[#10b981]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+          <span class="text-[#10b981]">Copiado!</span>
+        `;
+        setTimeout(() => {
+          copyBtn.innerHTML = originalContent;
+        }, 2000);
+      });
+    };
+  }
 };
 
 (window as any).openFinanceChargeDetail = (charge: any) => {
@@ -3422,14 +3459,36 @@ async function updateTransactionInvoice(
     showConfirm: false,
     showCancel: false,
     content: `
-  <div class="w-full">
-    <div class="mb-4 flex items-baseline gap-1">
-      <span class="text-[14px] font-medium text-[var(--color-text-secondary)]">R$</span>
-      <span class="text-[28px] font-bold text-[var(--color-text)] tracking-tight">${formatted}</span>
+  <div class="w-full relative">
+    <div class="mb-4 flex items-center justify-between">
+      <div class="flex items-baseline gap-1">
+        <span class="text-[14px] font-medium text-[var(--color-text-secondary)]">R$</span>
+        <span class="text-[28px] font-bold text-[var(--color-text)] tracking-tight">${formatted}</span>
+      </div>
+      <button id="btn-copy-charge-json" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--color-surface-hover)] border border-[var(--color-border)] hover:bg-[var(--color-surface-active)] transition-all text-[11px] font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-text)] group">
+         <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg>
+         <span>Copiar JSON</span>
+      </button>
     </div>
     <pre class="cc-json">${jsonStr}</pre>
   </div>
     `
   });
+
+  const copyBtn = document.getElementById('btn-copy-charge-json');
+  if (copyBtn) {
+    copyBtn.onclick = () => {
+      navigator.clipboard.writeText(jsonStr).then(() => {
+        const originalContent = copyBtn.innerHTML;
+        copyBtn.innerHTML = `
+          <svg class="w-3.5 h-3.5 text-[#10b981]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+          <span class="text-[#10b981]">Copiado!</span>
+        `;
+        setTimeout(() => {
+          copyBtn.innerHTML = originalContent;
+        }, 2000);
+      });
+    };
+  }
 };
 

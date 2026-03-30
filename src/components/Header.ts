@@ -333,7 +333,7 @@ export function Header({ user }: HeaderProps): string {
             Atualizações
           </button>
           ` : `
-          <button id="nav-btn-dashboard" class="nav-link ${sessionStorage.getItem('currentPage') === 'dashboard' ? 'active' : ''}">
+          <button id="nav-btn-dashboard" class="nav-link ${sessionStorage.getItem('currentPage') === 'dashboard' || !sessionStorage.getItem('currentPage') ? 'active' : ''}">
             Visão Geral
           </button>
 
@@ -433,7 +433,7 @@ export function Header({ user }: HeaderProps): string {
             Atualizações
           </button>
           ` : `
-          <button id="mobile-nav-dashboard" class="mobile-nav-link ${sessionStorage.getItem('currentPage') === 'dashboard' ? 'active' : ''}">
+          <button id="mobile-nav-dashboard" class="mobile-nav-link ${sessionStorage.getItem('currentPage') === 'dashboard' || !sessionStorage.getItem('currentPage') ? 'active' : ''}">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="3" y="3" width="7" height="7"></rect>
               <rect x="14" y="3" width="7" height="7"></rect>
@@ -716,6 +716,7 @@ export function attachHeaderListeners() {
     }
 
     // Mobile navigation listeners
+
     const mobileDashboard = document.getElementById('mobile-nav-dashboard');
     if (mobileDashboard) {
       mobileDashboard.addEventListener('click', () => {
