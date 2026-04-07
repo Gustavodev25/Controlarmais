@@ -1581,35 +1581,48 @@ function attachCardListeners(userId: string) {
 
     // Helpers for common actions
     const handleTogglePaid = async () => {
-      const billing = (billingsByReminderId.get(id) || []).find((b: any) => b.month === currentMonth);
-      const isPaid = billing?.status === 'paid' || r.status === 'paid' || r.paid === true ||
-        (Array.isArray(r.paidMonths) && r.paidMonths.includes(currentMonth));
+      try {
+        const billing = (billingsByReminderId.get(id) || []).find((b: any) => b.month === currentMonth);
+        const isPaid = billing?.status === 'paid' || r.status === 'paid' || r.paid === true ||
+          (Array.isArray(r.paidMonths) && r.paidMonths.includes(currentMonth));
 
-      const billingId = `${id}_${currentMonth}`;
-      if (!isPaid) {
-        await Promise.all([
-          setDoc(doc(db, `users/${userId}/reminder_billings/${billingId}`), {
-            reminderId: id,
-            month: currentMonth,
-            status: 'paid',
-            value: Number(r.value ?? r.amount ?? 0) || 0,
-            paidAt: Timestamp.now()
-          }),
-          updateDoc(doc(db, `users/${userId}/reminders/${id}`), {
+        const billingId = `${id}_${currentMonth}`;
+        if (!isPaid) {
+          const updateData: any = {
             paidMonths: arrayUnion(currentMonth),
             updatedAt: Timestamp.now()
-          })
-        ]);
-        toaster.create({ title: 'Pago', type: 'success' });
-      } else {
-        await Promise.all([
-          deleteDoc(doc(db, `users/${userId}/reminder_billings/${billingId}`)),
-          updateDoc(doc(db, `users/${userId}/reminders/${id}`), {
-            paidMonths: arrayRemove(currentMonth),
-            updatedAt: Timestamp.now()
-          })
-        ]);
-        toaster.create({ title: 'Pagamento removido', type: 'success' });
+          };
+          if (!r.frequency || r.frequency === 'once') {
+            updateData.paid = true;
+            updateData.status = 'paid';
+          }
+
+          await Promise.all([
+            setDoc(doc(db, `users/${userId}/reminder_billings/${billingId}`), {
+              reminderId: id,
+              month: currentMonth,
+              status: 'paid',
+              value: Number(r.value ?? r.amount ?? 0) || 0,
+              paidAt: Timestamp.now()
+            }),
+            updateDoc(doc(db, `users/${userId}/reminders/${id}`), updateData)
+          ]);
+          toaster.create({ title: 'Pago', type: 'success' });
+        } else {
+          await Promise.all([
+            deleteDoc(doc(db, `users/${userId}/reminder_billings/${billingId}`)),
+            updateDoc(doc(db, `users/${userId}/reminders/${id}`), {
+              paidMonths: arrayRemove(currentMonth),
+              paid: false,
+              status: 'pending',
+              updatedAt: Timestamp.now()
+            })
+          ]);
+          toaster.create({ title: 'Pagamento removido', type: 'success' });
+        }
+      } catch (err) {
+        console.error('Error toggling paid status', err);
+        toaster.create({ title: 'Erro', description: 'Ocorreu um erro ao atualizar.', type: 'error' });
       }
     };
 
