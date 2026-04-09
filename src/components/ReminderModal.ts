@@ -38,7 +38,12 @@ export function openReminderModal({
     ? String(editingReminder.value ?? '').replace('.', ',')
     : (prefill.value ? String(prefill.value).replace('.', ',') : '');
   const resolvedDate = isEditing
-    ? (editingReminder.date?.toDate ? editingReminder.date.toDate().toISOString().split('T')[0] : '')
+    ? (editingReminder.dueDate ||
+       (editingReminder.date?.toDate
+         ? editingReminder.date.toDate().toISOString().split('T')[0]
+         : editingReminder.date
+           ? String(editingReminder.date).split('T')[0]
+           : ''))
     : (prefill.date || new Date().toISOString().split('T')[0]);
   const resolvedFrequency = isEditing ? editingReminder.frequency : (prefill.frequency || 'monthly');
   const resolvedCategory = isEditing

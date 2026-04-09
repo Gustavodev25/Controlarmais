@@ -151,7 +151,7 @@ export function renderTransactions(user: any) {
           border: 1px solid var(--color-border);
           color: var(--color-text-secondary);
           white-space: nowrap;
-          max-width: 120px;
+          max-width: 180px;
           overflow: hidden;
           text-overflow: ellipsis;
         }
@@ -162,7 +162,7 @@ export function renderTransactions(user: any) {
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
-          max-width: 250px;
+          max-width: 480px;
         }
 
         @media (max-width: 640px) {

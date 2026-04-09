@@ -86,20 +86,36 @@ function calculateOverviewTotals(
   ccSummary: WebCrediCardSummary,
   totalAccountsBalance: number,
   overviewToggles: OverviewToggleState,
-  pendingSubscriptionsTotal: number,
-  pendingRemindersTotal: number,
-  pendingReminderIncomeTotal: number
+  recurrenceData: {
+    subsPending: number;
+    subsPaid: number;
+    remsIncomePending: number;
+    remsIncomePaid: number;
+    remsExpensePending: number;
+    remsExpensePaid: number;
+  }
 ) {
   const previsao = calcularPrevisaoFinanceira(config);
 
-  let totalReceitas = totalAccountsBalance;
-  if (overviewToggles.salario) totalReceitas += previsao.salarioLiquido;
-  if (overviewToggles.vale && config.habilitarVale) totalReceitas += previsao.vale;
-  if (overviewToggles.lembretes) totalReceitas += pendingReminderIncomeTotal;
+  // Forecast Math (What remains to happen)
+  let pendingReceitas = 0;
+  if (overviewToggles.salario) pendingReceitas += previsao.salarioLiquido;
+  if (overviewToggles.vale && config.habilitarVale) pendingReceitas += previsao.vale;
+  if (overviewToggles.lembretes) pendingReceitas += recurrenceData.remsIncomePending;
 
-  let totalDespesas = getIncludedCreditCardExpenseTotal(ccSummary);
-  if (overviewToggles.assinatura) totalDespesas += pendingSubscriptionsTotal;
-  if (overviewToggles.lembretes) totalDespesas += pendingRemindersTotal;
+  let pendingDespesas = getIncludedCreditCardExpenseTotal(ccSummary);
+  if (overviewToggles.assinatura) pendingDespesas += recurrenceData.subsPending;
+  if (overviewToggles.lembretes) pendingDespesas += recurrenceData.remsExpensePending;
+
+  // Display Cards Math (Total for the month)
+  let displayReceitas = 0;
+  if (overviewToggles.salario) displayReceitas += previsao.salarioLiquido;
+  if (overviewToggles.vale && config.habilitarVale) displayReceitas += previsao.vale;
+  if (overviewToggles.lembretes) displayReceitas += (recurrenceData.remsIncomePending + recurrenceData.remsIncomePaid);
+
+  let displayDespesas = getIncludedCreditCardExpenseTotal(ccSummary);
+  if (overviewToggles.assinatura) displayDespesas += (recurrenceData.subsPending + recurrenceData.subsPaid);
+  if (overviewToggles.lembretes) displayDespesas += (recurrenceData.remsExpensePending + recurrenceData.remsExpensePaid);
 
   const hasActiveProjection =
     overviewToggles.salario ||
@@ -109,13 +125,13 @@ function calculateOverviewTotals(
     ccSummary.cards.some(card => card.includeInExpenses);
 
   return {
-    totalReceitas,
-    totalDespesas,
-    saldoPrevisto: totalReceitas - totalDespesas,
+    displayReceitas,
+    displayDespesas,
+    saldoPrevisto: totalAccountsBalance + pendingReceitas - pendingDespesas,
     hasActiveProjection,
-    pendingRemindersTotal,
-    pendingReminderIncomeTotal,
-    pendingSubscriptionsTotal
+    pendingRemindersTotal: recurrenceData.remsExpensePending,
+    pendingReminderIncomeTotal: recurrenceData.remsIncomePending,
+    pendingSubscriptionsTotal: recurrenceData.subsPending
   };
 }
 
@@ -453,8 +469,11 @@ function DashboardContent(
   totalAccountsBalance: number = 0,
   overviewToggles: OverviewToggleState = { salario: false, vale: false, assinatura: false, lembretes: false },
   pendingSubscriptionsTotal: number = 0,
+  paidSubscriptionsTotal: number = 0,
   pendingRemindersTotal: number = 0,
-  pendingReminderIncomeTotal: number = 0
+  paidRemindersTotal: number = 0,
+  pendingReminderIncomeTotal: number = 0,
+  paidReminderIncomeTotal: number = 0
 ): string {
   const pagamento = getProximoPagamento(config.diaPagamento || 5);
   const [reais, centavos] = formatCurrency(config.salarioBase || 0).split(',');
@@ -465,11 +484,16 @@ function DashboardContent(
     ccSummary,
     totalAccountsBalance,
     overviewToggles,
-    pendingSubscriptionsTotal,
-    pendingRemindersTotal,
-    pendingReminderIncomeTotal
+    {
+      subsPending: pendingSubscriptionsTotal,
+      subsPaid: paidSubscriptionsTotal,
+      remsIncomePending: pendingReminderIncomeTotal,
+      remsIncomePaid: paidReminderIncomeTotal,
+      remsExpensePending: pendingRemindersTotal,
+      remsExpensePaid: paidRemindersTotal
+    }
   );
-  const { totalReceitas, totalDespesas, saldoPrevisto, hasActiveProjection } = totals;
+  const { displayReceitas, displayDespesas, saldoPrevisto, hasActiveProjection, pendingRemindersTotal: remsPending, pendingSubscriptionsTotal: subsPending } = totals;
   const [saldoReais, saldoCentavos] = formatCurrency(saldoPrevisto).split(',');
   const valorHora = formatCurrency((config.salarioBase || 0) / 220);
   const hasActiveToggles = hasActiveProjection;
@@ -548,7 +572,7 @@ function DashboardContent(
             <div class="overview-card-body p-3 flex flex-col justify-center flex-1">
               <div class="overview-card-value flex items-baseline gap-1" style="will-change:transform; transform-origin:left center;">
                 <span class="text-[11px] font-medium text-[var(--color-text-secondary)]">R$</span>
-                <span id="overview-receitas" class="text-[18px] font-bold text-emerald-400 tracking-tight">${formatCurrency(totalReceitas)}</span>
+                <span id="overview-receitas" class="text-[18px] font-bold text-emerald-400 tracking-tight">${formatCurrency(displayReceitas)}</span>
               </div>
             </div>
           </div>
@@ -564,9 +588,34 @@ function DashboardContent(
               </div>
             </div>
             <div class="overview-card-body p-3 flex flex-col justify-center flex-1">
-              <div class="overview-card-value flex items-baseline gap-1" style="will-change:transform; transform-origin:left center;">
+              <!-- Apenas assinatura ativa -->
+              <div id="overview-subs-row" class="${(overviewToggles.assinatura && !overviewToggles.lembretes) ? '' : 'hidden'}">
+                <span class="text-[8px] text-[var(--color-text-secondary)] block mb-0.5">Assinatura a pagar</span>
+                <div class="flex items-baseline gap-1">
+                  <span class="text-[10px] font-medium text-[var(--color-text-secondary)]">R$</span>
+                  <span id="overview-subs-pending" class="text-[18px] font-bold text-orange-400 tracking-tight">${formatCurrency(subsPending)}</span>
+                </div>
+              </div>
+              <!-- Apenas lembretes ativo -->
+              <div id="overview-rems-row" class="${(overviewToggles.lembretes && !overviewToggles.assinatura) ? '' : 'hidden'}">
+                <span class="text-[8px] text-[var(--color-text-secondary)] block mb-0.5">Lembretes a pagar</span>
+                <div class="flex items-baseline gap-1">
+                  <span class="text-[10px] font-medium text-[var(--color-text-secondary)]">R$</span>
+                  <span id="overview-rems-pending" class="text-[18px] font-bold text-orange-400 tracking-tight">${formatCurrency(remsPending)}</span>
+                </div>
+              </div>
+              <!-- Ambos ativos → soma em vermelho -->
+              <div id="overview-combined-row" class="${(overviewToggles.assinatura && overviewToggles.lembretes) ? '' : 'hidden'}">
+                <span class="text-[8px] text-[var(--color-text-secondary)] block mb-0.5">A pagar</span>
+                <div class="flex items-baseline gap-1">
+                  <span class="text-[10px] font-medium text-[var(--color-text-secondary)]">R$</span>
+                  <span id="overview-combined-pending" class="text-[18px] font-bold text-red-400 tracking-tight">${formatCurrency(subsPending + remsPending)}</span>
+                </div>
+              </div>
+              <!-- Nenhum ativo → despesas totais -->
+              <div id="overview-despesas-row" class="${(!overviewToggles.assinatura && !overviewToggles.lembretes) ? '' : 'hidden'} overview-card-value flex items-baseline gap-1" style="will-change:transform; transform-origin:left center;">
                 <span class="text-[11px] font-medium text-[var(--color-text-secondary)]">R$</span>
-                <span id="overview-despesas" class="text-[18px] font-bold text-red-400 tracking-tight">${formatCurrency(totalDespesas)}</span>
+                <span id="overview-despesas" class="text-[18px] font-bold text-red-400 tracking-tight">${formatCurrency(displayDespesas)}</span>
               </div>
             </div>
           </div>
@@ -620,8 +669,11 @@ export function renderDashboard(user: any, tab?: string) {
 
   let overviewToggles = loadOverviewToggles(user.uid);
   let pendingSubscriptionsTotal = 0;
+  let paidSubscriptionsTotal = 0;
   let pendingRemindersTotal = 0;
+  let paidRemindersTotal = 0;
   let pendingReminderIncomeTotal = 0;
+  let paidReminderIncomeTotal = 0;
 
 
   let categorySpentData: any[] = [];
@@ -720,14 +772,19 @@ export function renderDashboard(user: any, tab?: string) {
     animateBalanceChange(globalFinance.totalAccountsBalance);
 
     // 5. Update Overview Totals
-    const { totalReceitas, totalDespesas, saldoPrevisto } = calculateOverviewTotals(
+    const { displayReceitas: totalReceitas, displayDespesas: totalDespesas, saldoPrevisto } = calculateOverviewTotals(
       financeiroConfig,
       ccSummary,
       globalFinance.totalAccountsBalance,
       overviewToggles,
-      pendingSubscriptionsTotal,
-      pendingRemindersTotal,
-      pendingReminderIncomeTotal
+      {
+        subsPending: pendingSubscriptionsTotal,
+        subsPaid: paidSubscriptionsTotal,
+        remsIncomePending: pendingReminderIncomeTotal,
+        remsIncomePaid: paidReminderIncomeTotal,
+        remsExpensePending: pendingRemindersTotal,
+        remsExpensePaid: paidRemindersTotal
+      }
     );
     
     const overviewSaldoEl = document.getElementById('overview-saldo-previsto');
@@ -755,7 +812,21 @@ export function renderDashboard(user: any, tab?: string) {
       if (content) {
         recalculateBalance();
 
-        content.innerHTML = DashboardContent(userName, financeiroConfig, ccSummary, allCashAccounts, activeAccountIds, globalFinance.totalAccountsBalance, overviewToggles, pendingSubscriptionsTotal, pendingRemindersTotal, pendingReminderIncomeTotal);
+        content.innerHTML = DashboardContent(
+          userName, 
+          financeiroConfig, 
+          ccSummary, 
+          allCashAccounts, 
+          activeAccountIds, 
+          globalFinance.totalAccountsBalance, 
+          overviewToggles, 
+          pendingSubscriptionsTotal, 
+          paidSubscriptionsTotal,
+          pendingRemindersTotal, 
+          paidRemindersTotal,
+          pendingReminderIncomeTotal,
+          paidReminderIncomeTotal
+        );
 
         // Animate balance with liquid effect
         animateBalanceChange(globalFinance.totalAccountsBalance);
@@ -808,7 +879,21 @@ export function renderDashboard(user: any, tab?: string) {
         ${Header({ user: { ...user, ...userData } })}
         <main class="flex-1 w-full max-w-6xl mx-auto px-6 md:px-10 p-4 md:p-8 pt-20 md:pt-24 min-w-0">
           <div class="w-full" id="dashboard-dynamic-content">
-            ${DashboardContent(userName, financeiroConfig, ccSummary, allCashAccounts, activeAccountIds, globalFinance.totalAccountsBalance, overviewToggles, pendingSubscriptionsTotal, pendingRemindersTotal, pendingReminderIncomeTotal)}
+            ${DashboardContent(
+              userName, 
+              financeiroConfig, 
+              ccSummary, 
+              allCashAccounts, 
+              activeAccountIds, 
+              globalFinance.totalAccountsBalance, 
+              overviewToggles, 
+              pendingSubscriptionsTotal, 
+              paidSubscriptionsTotal,
+              pendingRemindersTotal, 
+              paidRemindersTotal,
+              pendingReminderIncomeTotal,
+              paidReminderIncomeTotal
+            )}
           </div>
         </main>
       </div>
@@ -969,14 +1054,19 @@ export function renderDashboard(user: any, tab?: string) {
   // Moved to component
 
   const updateOverviewForecast = () => {
-    const { totalReceitas, totalDespesas, saldoPrevisto, hasActiveProjection } = calculateOverviewTotals(
+    const { displayReceitas, displayDespesas, saldoPrevisto, hasActiveProjection, pendingRemindersTotal: remsPendingVal, pendingSubscriptionsTotal: subsPendingVal } = calculateOverviewTotals(
       financeiroConfig,
       ccSummary,
       globalFinance.totalAccountsBalance,
       overviewToggles,
-      pendingSubscriptionsTotal,
-      pendingRemindersTotal,
-      pendingReminderIncomeTotal
+      {
+        subsPending: pendingSubscriptionsTotal,
+        subsPaid: paidSubscriptionsTotal,
+        remsIncomePending: pendingReminderIncomeTotal,
+        remsIncomePaid: paidReminderIncomeTotal,
+        remsExpensePending: pendingRemindersTotal,
+        remsExpensePaid: paidRemindersTotal
+      }
     );
 
     const [r, c] = formatCurrency(saldoPrevisto).split(',');
@@ -992,15 +1082,32 @@ export function renderDashboard(user: any, tab?: string) {
 
     const receitasEl = document.getElementById('overview-receitas');
     if (receitasEl) {
-      receitasEl.textContent = formatCurrency(totalReceitas);
+      receitasEl.textContent = formatCurrency(displayReceitas);
       gsap.fromTo(receitasEl, { scale: 1.05, filter: 'blur(2px)' }, { scale: 1, filter: 'blur(0px)', duration: 0.3, ease: 'power2.out' });
     }
 
     const despesasEl = document.getElementById('overview-despesas');
     if (despesasEl) {
-      despesasEl.textContent = formatCurrency(totalDespesas);
+      despesasEl.textContent = formatCurrency(displayDespesas);
       gsap.fromTo(despesasEl, { scale: 1.05, filter: 'blur(2px)' }, { scale: 1, filter: 'blur(0px)', duration: 0.3, ease: 'power2.out' });
     }
+
+    const bothActive = overviewToggles.assinatura && overviewToggles.lembretes;
+    const onlySubs = overviewToggles.assinatura && !overviewToggles.lembretes;
+    const onlyRems = overviewToggles.lembretes && !overviewToggles.assinatura;
+    const noneActive = !overviewToggles.assinatura && !overviewToggles.lembretes;
+
+    const subsPendingEl = document.getElementById('overview-subs-pending');
+    if (subsPendingEl) subsPendingEl.textContent = formatCurrency(subsPendingVal);
+    const remsPendingEl = document.getElementById('overview-rems-pending');
+    if (remsPendingEl) remsPendingEl.textContent = formatCurrency(remsPendingVal);
+    const combinedEl = document.getElementById('overview-combined-pending');
+    if (combinedEl) combinedEl.textContent = formatCurrency(subsPendingVal + remsPendingVal);
+
+    document.getElementById('overview-subs-row')?.classList.toggle('hidden', !onlySubs);
+    document.getElementById('overview-rems-row')?.classList.toggle('hidden', !onlyRems);
+    document.getElementById('overview-combined-row')?.classList.toggle('hidden', !bothActive);
+    document.getElementById('overview-despesas-row')?.classList.toggle('hidden', !noneActive);
   };
 
   const bindConfigListeners = () => {
@@ -1030,28 +1137,36 @@ export function renderDashboard(user: any, tab?: string) {
         billingsBySubId.set(b.subscriptionId, arr);
       });
 
-      let subsTotal = 0;
+      let subsPending = 0;
+      let subsPaid = 0;
+      const todayMonthKey = toMonthKey(new Date());
       subsSnap.docs.forEach(d => {
         const sub = { id: d.id, ...d.data() } as any;
         if (sub.source === 'pluggy-auto') return;
 
-        // Skip if subscription starts in the future
-        const createdMonth = sub.createdAt?.toDate 
-          ? toMonthKey(sub.createdAt.toDate()) 
+        // Same filter as Subscriptions page refreshSummaryCards
+        const billings = billingsBySubId.get(sub.id) ?? [];
+        const createdMonth = sub.createdAt?.toDate
+          ? toMonthKey(sub.createdAt.toDate())
           : (sub.createdAt ? toMonthKey(new Date(sub.createdAt)) : monthKey);
-        if (monthKey < createdMonth) return;
+        const isInMonth = billings.length === 0 ||
+          billings.some((b: any) => b.month === monthKey) ||
+          monthKey >= createdMonth;
+        if (!isInMonth) return;
 
-        // Skip yearly if not in the same month it was created
-        if (sub.frequency === 'yearly') {
-          const createdMonthStr = createdMonth.split('-')[1];
-          const currentMonthStr = monthKey.split('-')[1];
-          if (createdMonthStr !== currentMonthStr) return;
-        }
-
-        const billing = (billingsBySubId.get(sub.id) || []).find((b: any) => b.month === monthKey);
+        const val = Number(sub.value ?? sub.amount ?? 0) || 0;
+        const billing = billings.find((b: any) => b.month === monthKey);
         const isPaid = billing?.status === 'paid' || sub.status === 'paid' || sub.paid === true ||
           (Array.isArray(sub.paidMonths) && sub.paidMonths.includes(monthKey));
-        if (!isPaid) subsTotal += Number(sub.value ?? sub.amount ?? 0);
+
+        if (isPaid) {
+          subsPaid += val;
+        } else {
+          // Yearly subscriptions only count as pending in the current calendar month
+          if (sub.frequency !== 'yearly' || monthKey === todayMonthKey) {
+            subsPending += val;
+          }
+        }
       });
 
       // Index reminder billings
@@ -1063,46 +1178,65 @@ export function renderDashboard(user: any, tab?: string) {
         billingsByRemId.set(b.reminderId, arr);
       });
 
-      let remsExpenseTotal = 0;
-      let remsIncomeTotal = 0;
+      let remsExpPending = 0;
+      let remsExpPaid = 0;
+      let remsIncPending = 0;
+      let remsIncPaid = 0;
+      
       remsSnap.docs.forEach(d => {
         const rem = { id: d.id, ...d.data() } as any;
 
         const val = Number(rem.value ?? rem.amount ?? 0) || 0;
         const isIncome = rem.type === 'income';
 
-        // Robust check for current month status
+        // Same paid check as Reminders page refreshSummary
         const billing = (billingsByRemId.get(rem.id) || []).find((b: any) => b.month === monthKey);
         const isPaidThisMonth = billing?.status === 'paid' || rem.status === 'paid' || rem.paid === true ||
           (Array.isArray(rem.paidMonths) && rem.paidMonths.includes(monthKey));
 
-        // Check if reminder is active and should be billed this month (matching Reminders.ts logic)
+        // Same filter as Reminders page refreshSummary
         let isActive = false;
         if (rem.dueDate) {
           const dueMonthKey = rem.dueDate.substring(0, 7);
           if (rem.frequency === 'yearly') {
-            isActive = (rem.dueDate.substring(5, 7) === monthKey.substring(5, 7));
+            isActive = rem.dueDate.substring(5, 7) === monthKey.substring(5, 7);
           } else if (rem.frequency === 'once') {
             if (dueMonthKey === monthKey) isActive = true;
-            else if (dueMonthKey < monthKey && !isPaidThisMonth) isActive = true; // Include past unpaid once
+            else {
+              const isDocPaid = rem.status === 'paid' || rem.paid === true ||
+                (Array.isArray(rem.paidMonths) && rem.paidMonths.includes(dueMonthKey));
+              if (dueMonthKey < monthKey && !isDocPaid) isActive = true;
+            }
           } else {
-            // Monthly or default
-            isActive = (monthKey >= dueMonthKey);
+            isActive = monthKey >= dueMonthKey;
           }
         } else {
-          const created = rem.createdAt?.toDate ? toMonthKey(rem.createdAt.toDate()) : monthKey;
-          isActive = (monthKey >= created || rem.frequency === 'once');
+          const remBillings = billingsByRemId.get(rem.id) || [];
+          if (remBillings.some((b: any) => b.month === monthKey)) {
+            isActive = true;
+          } else {
+            const created = rem.createdAt?.toDate ? toMonthKey(rem.createdAt.toDate()) : monthKey;
+            isActive = monthKey >= created || rem.frequency === 'once';
+          }
         }
 
-        if (isActive && !isPaidThisMonth) {
-          if (isIncome) remsIncomeTotal += val;
-          else remsExpenseTotal += val;
+        if (isActive) {
+          if (isIncome) {
+            if (isPaidThisMonth) remsIncPaid += val;
+            else remsIncPending += val;
+          } else {
+            if (isPaidThisMonth) remsExpPaid += val;
+            else remsExpPending += val;
+          }
         }
       });
 
-      pendingSubscriptionsTotal = subsTotal;
-      pendingRemindersTotal = remsExpenseTotal;
-      pendingReminderIncomeTotal = remsIncomeTotal;
+      pendingSubscriptionsTotal = subsPending;
+      paidSubscriptionsTotal = subsPaid;
+      pendingRemindersTotal = remsExpPending;
+      paidRemindersTotal = remsExpPaid;
+      pendingReminderIncomeTotal = remsIncPending;
+      paidReminderIncomeTotal = remsIncPaid;
 
       // Atualiza os cards de resumo e a previsão
       updateView();

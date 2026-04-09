@@ -37,6 +37,7 @@ let billingsByReminderId: Map<string, any> = new Map();
 let currentSearch = '';
 let currentSort: 'name' | 'value' | 'date' = 'date';
 let currentStatusFilter: 'all' | 'paid' | 'pending' = 'all';
+let currentTypeFilter: 'all' | 'income' | 'expense' = 'all';
 let currentMonth = toMonthKey(new Date());   // 'YYYY-MM'
 
 // ─── Real-time listener cleanup ───────────────────────────────────────────────
@@ -274,6 +275,14 @@ function SummaryStrip(): string {
         <strong id="card-to-pay" class="rem-summary-amount rem-summary-amount--danger">0<span class="rem-decimal">,00</span></strong>
       </div>
     </div>
+    <div class="rem-summary-divider"></div>
+    <div class="rem-summary-item">
+      <span class="rem-summary-label">Total Mensal</span>
+      <div class="rem-summary-value-row">
+        <span class="rem-summary-currency">R$</span>
+        <strong id="card-total-month" class="rem-summary-amount">0<span class="rem-decimal">,00</span></strong>
+      </div>
+    </div>
 `;
 
   return DynamicIsland({
@@ -289,7 +298,7 @@ function SummaryStrip(): string {
 
 function StatusSelector(): string {
   const statusLabels: Record<string, string> = {
-    all: 'Todos',
+    all: 'Status: Todos',
     pending: 'Em aberto',
     paid: 'Realizados'
   };
@@ -312,6 +321,37 @@ function StatusSelector(): string {
     id: 'rem-status-selector',
     content: innerContent,
     contentWrapperId: 'rem-status-content-wrapper',
+    className: 'month-selector-container',
+    hidden: true,
+    style: 'padding: 2px 2px; gap: 0px;',
+  });
+}
+
+function TypeSelector(): string {
+  const typeLabels: Record<string, string> = {
+    all: 'Tipo: Todos',
+    income: 'Receitas',
+    expense: 'Despesas'
+  };
+
+  const innerContent = `
+    <button id="rem-type-prev" class="month-nav-btn relative z-10" type="button" aria-label="Tipo anterior">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="15 18 9 12 15 6"></polyline>
+      </svg>
+    </button>
+    <span id="rem-type-label" class="month-selector-label" style="min-width: 85px; text-align: center;">${typeLabels[currentTypeFilter]}</span>
+    <button id="rem-type-next" class="month-nav-btn relative z-10" type="button" aria-label="Próximo tipo">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="9 18 15 12 9 6"></polyline>
+      </svg>
+    </button>
+  `;
+
+  return DynamicIsland({
+    id: 'rem-type-selector',
+    content: innerContent,
+    contentWrapperId: 'rem-type-content-wrapper',
     className: 'month-selector-container',
     hidden: true,
     style: 'padding: 2px 2px; gap: 0px;',
@@ -348,6 +388,7 @@ function Toolbar(): string {
       <div class="rem-header-controls">
         <div class="flex flex-row items-center gap-2 w-full">
           ${StatusSelector()}
+          ${TypeSelector()}
           ${MonthSelector({ id: 'rem-month-selector' })}
         </div>
       </div>
@@ -1195,6 +1236,7 @@ export async function renderReminders(user: any) {
   currentSearch = '';
   currentSort = 'date';
   currentStatusFilter = 'all';
+  currentTypeFilter = 'all';
 
   app.innerHTML = `
     <div class="min-h-screen text-[var(--color-text)] flex flex-col relative overflow-hidden bg-[var(--color-background)]">
@@ -1241,6 +1283,7 @@ export async function renderReminders(user: any) {
   });
 
   attachStatusSelectorListeners(user.uid);
+  attachTypeSelectorListeners(user.uid);
 }
 
 function attachStatusSelectorListeners(userId: string) {
@@ -1295,6 +1338,60 @@ function attachStatusSelectorListeners(userId: string) {
   // Entrance animation
   container.classList.remove('dynamic-island--hidden');
   animateDynamicIslandEntrance('rem-status-selector', 'rem-status-content-wrapper');
+}
+
+function attachTypeSelectorListeners(userId: string) {
+  const typeOrder: ('all' | 'income' | 'expense')[] = ['all', 'income', 'expense'];
+  const typeLabels: Record<string, string> = {
+    all: 'Tipo: Todos',
+    income: 'Receitas',
+    expense: 'Despesas'
+  };
+
+  const container = document.getElementById('rem-type-selector');
+  const label = document.getElementById('rem-type-label');
+  const prevBtn = document.getElementById('rem-type-prev');
+  const nextBtn = document.getElementById('rem-type-next');
+
+  if (!container || !label || !prevBtn || !nextBtn) return;
+
+  const updateType = (direction: 'next' | 'prev') => {
+    const currentIndex = typeOrder.indexOf(currentTypeFilter);
+    let nextIndex;
+    if (direction === 'next') {
+      nextIndex = (currentIndex + 1) % typeOrder.length;
+    } else {
+      nextIndex = (currentIndex - 1 + typeOrder.length) % typeOrder.length;
+    }
+
+    const nextType = typeOrder[nextIndex];
+
+    animateDynamicIslandTransition({
+      containerId: 'rem-type-selector',
+      contentWrapperId: 'rem-type-content-wrapper',
+      direction: direction === 'next' ? 'next' : 'prev',
+      onMidpoint: () => {
+        currentTypeFilter = nextType;
+        label.textContent = typeLabels[currentTypeFilter];
+        renderReminderList(userId);
+        refreshSummary();
+      }
+    });
+  };
+
+  prevBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    updateType('prev');
+  });
+
+  nextBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    updateType('next');
+  });
+
+  // Entrance animation
+  container.classList.remove('dynamic-island--hidden');
+  animateDynamicIslandEntrance('rem-type-selector', 'rem-type-content-wrapper');
 }
 
 function attachToolbarListeners(userId: string) {
@@ -1357,6 +1454,7 @@ function loadReminders(userId: string) {
     document.getElementById('rem-toolbar')?.classList.toggle('hidden', !has);
     document.getElementById('rem-month-selector')?.classList.toggle('hidden', !has);
     document.getElementById('rem-status-selector')?.classList.toggle('hidden', !has);
+    document.getElementById('rem-type-selector')?.classList.toggle('hidden', !has);
   };
 
   // Real-time listener for reminders
@@ -1434,6 +1532,10 @@ function renderReminderList(userId: string) {
         (Array.isArray(r.paidMonths) && r.paidMonths.includes(currentMonth));
       return currentStatusFilter === 'paid' ? isPaid : !isPaid;
     });
+  }
+
+  if (currentTypeFilter !== 'all') {
+    filtered = filtered.filter(r => r.type === currentTypeFilter);
   }
 
   if (currentSort === 'name') filtered.sort((a, b) => (a.name || a.title || a.description || '').localeCompare(b.name || b.title || b.description || ''));
@@ -1687,13 +1789,10 @@ function refreshSummary() {
 
   let toReceive = 0;
   let toPay = 0;
+  let totalIncome = 0;
+  let totalExpense = 0;
 
-  const filteredItems = currentStatusFilter === 'all' ? monthItems : monthItems.filter(r => {
-    const b = (billingsByReminderId.get(r.id) || []).find((x: any) => x.month === currentMonth);
-    const isPaid = b?.status === 'paid' || r.status === 'paid' || r.paid === true ||
-      (Array.isArray(r.paidMonths) && r.paidMonths.includes(currentMonth));
-    return currentStatusFilter === 'paid' ? isPaid : !isPaid;
-  });
+  const filteredItems = currentTypeFilter === 'all' ? monthItems : monthItems.filter(r => r.type === currentTypeFilter);
 
   filteredItems.forEach(r => {
     const val = Number(r.value ?? r.amount ?? 0) || 0;
@@ -1704,8 +1803,10 @@ function refreshSummary() {
       (Array.isArray(r.paidMonths) && r.paidMonths.includes(currentMonth));
 
     if (isIncome) {
+      totalIncome += val;
       if (!isReminderPaid) toReceive += val;
     } else {
+      totalExpense += val;
       if (!isReminderPaid) toPay += val;
     }
   });
@@ -1715,9 +1816,24 @@ function refreshSummary() {
 
   const toReceiveEl = document.getElementById('card-to-receive');
   const toPayEl = document.getElementById('card-to-pay');
+  const totalMonthEl = document.getElementById('card-total-month');
 
   if (toReceiveEl) toReceiveEl.innerHTML = fmtSplit(toReceive);
   if (toPayEl) toPayEl.innerHTML = fmtSplit(toPay);
+  if (totalMonthEl) {
+    // Show consolidated total of filtered items
+    const totalConsolidated = totalExpense > 0 ? totalExpense : totalIncome;
+    // If both exist and type filter is ALL, show the net or just expense?
+    // Let's mirror what the user probably wants: the absolute total of expenses if filtering by expenses, or income if income.
+    // If filtering by ALL, let's show Expenses minus Income? Or just one?
+    // User screenshot suggests they want the Total of the current view.
+    let displayTotal = 0;
+    if (currentTypeFilter === 'expense') displayTotal = totalExpense;
+    else if (currentTypeFilter === 'income') displayTotal = totalIncome;
+    else displayTotal = totalExpense; // Default to expenses in summary if both exist
+
+    totalMonthEl.innerHTML = fmtSplit(displayTotal);
+  }
 }
 
 
