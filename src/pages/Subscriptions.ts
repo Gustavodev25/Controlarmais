@@ -887,6 +887,9 @@ const STYLES = `
   }
   .btn-action-sub:hover    { opacity: 1; }
   .btn-action-sub:focus-visible { outline: 2px solid var(--color-text-secondary); outline-offset: 2px; }
+  html[data-theme="light"] .subs-card-actions lottie-player {
+    filter: brightness(0);
+  }
 
   /* ── Skeleton ────────────────────────────────────────── */
   @keyframes shimmer-wave {

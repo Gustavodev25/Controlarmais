@@ -866,6 +866,9 @@ const STYLES = `
   }
   .btn-action-rem:hover    { opacity: 1; }
   .btn-action-rem:focus-visible { outline: 2px solid var(--color-text-secondary); outline-offset: 2px; }
+  html[data-theme="light"] .rem-card-actions lottie-player {
+    filter: brightness(0);
+  }
 
   .btn-pay-rem { color: #10b981; opacity: 1; }
   .btn-pay-rem:hover { opacity: 1; }

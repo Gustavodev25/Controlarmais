@@ -15,8 +15,86 @@ import { GenericDropdown, attachGenericDropdownListeners } from '../components/G
 const verifiedIconStripe = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="#6faf6e" class="shrink-0" title="Stripe: Assinatura Verificada e Ativa"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12.01 2.011a3.2 3.2 0 0 1 2.113 .797l.154 .145l.698 .698a1.2 1.2 0 0 0 .71 .341l.135 .008h1a3.2 3.2 0 0 1 3.195 3.018l.005 .182v1c0 .27 .092 .533 .258 .743l.09 .1l.697 .698a3.2 3.2 0 0 1 .147 4.382l-.145 .154l-.698 .698a1.2 1.2 0 0 0 -.341 .71l-.008 .135v1a3.2 3.2 0 0 1 -3.018 3.195l-.182 .005h-1a1.2 1.2 0 0 0 -.743 .258l-.1 .09l-.698 .697a3.2 3.2 0 0 1 -4.382 .147l-.154 -.145l-.698 -.698a1.2 1.2 0 0 0 -.71 -.341l-.135 -.008h-1a3.2 3.2 0 0 1 -3.195 -3.018l-.005 -.182v-1a1.2 1.2 0 0 0 -.258 -.743l-.09 -.1l-.697 -.698a3.2 3.2 0 0 1 -.147 -4.382l.145 -.154l.698 -.698a1.2 1.2 0 0 0 .341 -.71l.008 -.135v-1l.005 -.182a3.2 3.2 0 0 1 3.013 -3.013l.182 -.005h1a1.2 1.2 0 0 0 .743 -.258l.1 -.09l.698 -.697a3.2 3.2 0 0 1 2.269 -.944zm3.697 7.282a1 1 0 0 0 -1.414 0l-3.293 3.292l-1.293 -1.292l-.094 -.083a1 1 0 0 0 -1.32 1.497l2 2l.094 .083a1 1 0 0 0 1.32 -.083l4 -4l.083 -.094a1 1 0 0 0 -.083 -1.32z" /></svg>`;
 const verifiedIconAsaas = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="#2869d2" class="shrink-0" title="Asaas: Assinatura Verificada e Ativa"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12.01 2.011a3.2 3.2 0 0 1 2.113 .797l.154 .145l.698 .698a1.2 1.2 0 0 0 .71 .341l.135 .008h1a3.2 3.2 0 0 1 3.195 3.018l.005 .182v1c0 .27 .092 .533 .258 .743l.09 .1l.697 .698a3.2 3.2 0 0 1 .147 4.382l-.145 .154l-.698 .698a1.2 1.2 0 0 0 -.341 .71l-.008 .135v1a3.2 3.2 0 0 1 -3.018 3.195l-.182 .005h-1a1.2 1.2 0 0 0 -.743 .258l-.1 .09l-.698 .697a3.2 3.2 0 0 1 -4.382 .147l-.154 -.145l-.698 -.698a1.2 1.2 0 0 0 -.71 -.341l-.135 -.008h-1a3.2 3.2 0 0 1 -3.195 -3.018l-.005 -.182v-1a1.2 1.2 0 0 0 -.258 -.743l-.09 -.1l-.697 -.698a3.2 3.2 0 0 1 -.147 -4.382l.145 -.154l.698 -.698a1.2 1.2 0 0 0 .341 -.71l.008 -.135v-1l.005 -.182a3.2 3.2 0 0 1 3.013 -3.013l.182 -.005h1a1.2 1.2 0 0 0 .743 -.258l.1 -.09l.698 -.697a3.2 3.2 0 0 1 2.269 -.944zm3.697 7.282a1 1 0 0 0 -1.414 0l-3.293 3.292l-1.293 -1.292l-.094 -.083a1 1 0 0 0 -1.32 1.497l2 2l.094 .083a1 1 0 0 0 1.32 -.083l4 -4l.083 -.094a1 1 0 0 0 -.083 -1.32z" /></svg>`;
 const loaderIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" title="Verificando assinatura..."><style>@keyframes spinner_qM83{0%{stroke-dasharray:0 150;stroke-dashoffset:0}47.5%{stroke-dasharray:42 150;stroke-dashoffset:-16}95%,100%{stroke-dasharray:42 150;stroke-dashoffset:-59}}@keyframes spinner_8Q3b{100%{transform:rotate(360deg)}}.spi{transform-origin:center;animation:spinner_8Q3b 2s linear infinite}.spi circle{stroke-linecap:round;animation:spinner_qM83 1.5s ease-in-out infinite}</style><g class="spi"><circle cx="12" cy="12" r="9.5" fill="none" /></g></svg>`;
+const DEFAULT_PRO_MONTHLY_AMOUNT = 35.90;
+const moneyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
 // ====================== HELPERS ======================
+
+function normalizeValue(value: any): string {
+  return String(value ?? '').trim().toLowerCase();
+}
+
+function parseMoneyValue(value: any): number {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  if (value === null || value === undefined) return 0;
+
+  let normalized = String(value).trim().replace(/[^\d,.-]/g, '');
+  if (!normalized) return 0;
+
+  const hasComma = normalized.includes(',');
+  const hasDot = normalized.includes('.');
+
+  if (hasComma && hasDot) {
+    normalized = normalized.replace(/\./g, '').replace(',', '.');
+  } else if (hasComma) {
+    normalized = normalized.replace(',', '.');
+  }
+
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function isAnnualBillingCycle(value: any): boolean {
+  return ['annual', 'year', 'yearly', 'anual'].includes(normalizeValue(value));
+}
+
+function isActiveClient(userItem: any): boolean {
+  const status = normalizeValue(userItem.status);
+  const plan = normalizeValue(userItem.plan);
+  return userItem.isVerified === true || (plan === 'pro' && (status === 'active' || status === 'trialing'));
+}
+
+function getMonthlyRevenue(userItem: any): number {
+  const monthlyAmount = parseMoneyValue(userItem.subscriptionMonthlyAmount);
+  if (monthlyAmount > 0) return monthlyAmount;
+
+  const rawAmount = parseMoneyValue(
+    userItem.subscriptionAmount ?? userItem.subscriptionPrice ?? userItem.nextAmount ?? userItem.price
+  );
+
+  if (rawAmount > 0) {
+    return isAnnualBillingCycle(userItem.billingCycle) ? rawAmount / 12 : rawAmount;
+  }
+
+  return isActiveClient(userItem) ? DEFAULT_PRO_MONTHLY_AMOUNT : 0;
+}
+
+function getActiveClientSummary(users: any[]): { count: number; revenue: number } {
+  return users.reduce((acc, userItem) => {
+    if (!isActiveClient(userItem)) return acc;
+
+    acc.count += 1;
+    acc.revenue += getMonthlyRevenue(userItem);
+    return acc;
+  }, { count: 0, revenue: 0 });
+}
+
+function updateTableSummary(users: any[]): void {
+  const summary = getActiveClientSummary(users);
+  const activeCountEl = document.querySelector('.cc-active-client-count');
+  const revenueEl = document.querySelector('.cc-active-revenue');
+
+  if (activeCountEl) {
+    activeCountEl.textContent = `${summary.count} cliente${summary.count !== 1 ? 's' : ''}`;
+  }
+
+  if (revenueEl) {
+    revenueEl.textContent = moneyFormatter.format(summary.revenue);
+  }
+}
 
 function statusBadge(status: string, verified: string | null): string {
   const s = (verified || status || '').toLowerCase();
@@ -262,7 +340,7 @@ function applyFilterAndRender() {
   filteredUsersGlobal = allUsersGlobal.filter((u: any) => {
     // Filtro do Grupo 1 (Status/Plano)
     const match1 = activeFilter1 === 'all_status' || 
-                   (activeFilter1 === 'active_subs' && (u.status === 'active' || u.isVerified === true)) ||
+                   (activeFilter1 === 'active_subs' && isActiveClient(u)) ||
                    (activeFilter1 === 'pro' && u.plan === 'pro');
     
     // Filtro do Grupo 2 (Provedor)
@@ -278,6 +356,7 @@ function applyFilterAndRender() {
   if (countSpan) {
     countSpan.textContent = `${filteredUsersGlobal.length} usuário${filteredUsersGlobal.length !== 1 ? 's' : ''}`;
   }
+  updateTableSummary(filteredUsersGlobal);
 
   // Re-render Avvvatars
   document.querySelectorAll('.avvvatar-target').forEach(el => {
@@ -444,6 +523,17 @@ async function loadSubscriptions(): Promise<void> {
             <span class="cc-table-header-title">Controle de Usuários</span>
           </div>
           <div class="cc-table-header-right">
+            <div class="cc-table-kpis" aria-label="Resumo de clientes ativos">
+              <div class="cc-table-kpi">
+                <span class="cc-table-kpi-label">Clientes ativos</span>
+                <strong class="cc-table-kpi-value cc-active-client-count">0 clientes</strong>
+              </div>
+              <div class="cc-table-kpi">
+                <span class="cc-table-kpi-label">Receita/mês</span>
+                <strong class="cc-table-kpi-value cc-active-revenue">${moneyFormatter.format(0)}</strong>
+              </div>
+            </div>
+            <div class="cc-header-sep"></div>
             <div id="verify-loading-indicator" style="display:none;align-items:center;gap:5px;">
               <div class="cc-spinner-xs"></div>
               <span style="font-size:11px;color:var(--color-text-secondary);">Buscando dados verificados…</span>
@@ -526,15 +616,16 @@ async function loadSubscriptions(): Promise<void> {
               btn.setAttribute('data-user', JSON.stringify(uData));
             } catch(e){}
           });
-          // If the current filter is verified, we might need to re-apply it
-          if (activeFilter1 === 'active_subs') {
-              applyFilterAndRender();
-          }
         } else {
           u.isVerified = false;
           document.querySelectorAll(`.user-verify-badge-${u.uid}`).forEach(el => {
             (el as HTMLElement).style.display = 'none';
           });
+        }
+        if (activeFilter1 === 'active_subs') {
+          applyFilterAndRender();
+        } else {
+          updateTableSummary(filteredUsersGlobal);
         }
         onVerifySettled();
       })
@@ -543,6 +634,11 @@ async function loadSubscriptions(): Promise<void> {
         document.querySelectorAll(`.user-verify-badge-${u.uid}`).forEach(el => {
            (el as HTMLElement).style.display = 'none';
         });
+        if (activeFilter1 === 'active_subs') {
+          applyFilterAndRender();
+        } else {
+          updateTableSummary(filteredUsersGlobal);
+        }
         onVerifySettled();
       });
     });
@@ -725,8 +821,36 @@ export function renderAdminSubscriptions(user: any) {
         .cc-table-header-right {
           display: flex;
           align-items: center;
-          gap: 20px;
+          gap: 14px;
           flex-shrink: 0;
+        }
+        .cc-table-kpis {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          flex-wrap: wrap;
+        }
+        .cc-table-kpi {
+          display: inline-flex;
+          align-items: baseline;
+          gap: 6px;
+          white-space: nowrap;
+        }
+        .cc-table-kpi-label {
+          font-size: 10px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+          color: var(--color-text-secondary);
+        }
+        .cc-table-kpi-value {
+          font-family: 'IBM Plex Mono', monospace;
+          font-size: 12px;
+          font-weight: 600;
+          color: var(--color-text);
+        }
+        .cc-table-count {
+          white-space: nowrap;
         }
         .cc-header-sep {
           width: 1px;
@@ -903,10 +1027,23 @@ export function renderAdminSubscriptions(user: any) {
             flex-wrap: wrap;
           }
           .cc-table-header-right {
+            width: 100%;
             gap: 10px;
+            flex-wrap: wrap;
+            justify-content: space-between;
           }
           .cc-table-header-left {
             flex: 1;
+          }
+          .cc-table-kpis {
+            flex: 1 1 100%;
+            gap: 10px;
+          }
+          .cc-table-kpi {
+            flex: 1 1 auto;
+          }
+          .cc-table-kpi-value {
+            font-size: 11.5px;
           }
 
           /* Card layout: converte tabela em lista de cards */

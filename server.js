@@ -110,6 +110,53 @@ function roundCurrencyToCents(value) {
     return Math.round(Number(value || 0) * 100);
 }
 
+function parseMoneyValue(value) {
+    if (typeof value === 'number') {
+        return Number.isFinite(value) ? value : 0;
+    }
+
+    if (value === null || value === undefined) return 0;
+
+    const rawValue = String(value).trim();
+    if (!rawValue) return 0;
+
+    let normalized = rawValue.replace(/[^\d,.-]/g, '');
+    if (!normalized) return 0;
+
+    const hasComma = normalized.includes(',');
+    const hasDot = normalized.includes('.');
+
+    if (hasComma && hasDot) {
+        normalized = normalized.replace(/\./g, '').replace(',', '.');
+    } else if (hasComma) {
+        normalized = normalized.replace(',', '.');
+    }
+
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function isAnnualBillingCycle(value) {
+    const cycle = String(value || '').trim().toLowerCase();
+    return ['annual', 'year', 'yearly', 'anual'].includes(cycle);
+}
+
+function getSubscriptionMonthlyAmount(sub = {}, data = {}) {
+    const rawAmount = [
+        sub.nextAmount,
+        sub.price,
+        sub.amount,
+        sub.value,
+        data.planPrice,
+        data.valor,
+    ].map(parseMoneyValue).find((amount) => amount > 0) || 0;
+
+    if (!rawAmount) return 0;
+    return isAnnualBillingCycle(sub.billingCycle || sub.frequency || sub.interval)
+        ? rawAmount / 12
+        : rawAmount;
+}
+
 function findSyncCreditComboById(comboId) {
     return SYNC_CREDIT_COMBOS.find((combo) => combo.id === comboId) || null;
 }
@@ -1393,6 +1440,16 @@ app.get('/api/admin/users', async (req, res) => {
             const provider = sub.provider || (sub.asaasCustomerId ? 'asaas' : sub.stripeCustomerId ? 'stripe' : 'unknown');
             const plan = sub.plan || data.plan || 'free';
             const status = sub.status || 'unknown';
+            const billingCycle = sub.billingCycle || sub.frequency || sub.interval || 'mensal';
+            const subscriptionAmount = [
+                sub.nextAmount,
+                sub.price,
+                sub.amount,
+                sub.value,
+                data.planPrice,
+                data.valor,
+            ].map(parseMoneyValue).find((amount) => amount > 0) || 0;
+            const subscriptionMonthlyAmount = getSubscriptionMonthlyAmount(sub, data);
 
             let createdAt = data.createdAt || authUser?.metadata?.creationTime || null;
             if (createdAt && typeof createdAt.toDate === 'function') {
@@ -1417,6 +1474,9 @@ app.get('/api/admin/users', async (req, res) => {
                 provider,
                 plan,
                 status,
+                billingCycle,
+                subscriptionAmount,
+                subscriptionMonthlyAmount,
                 isAdmin: data.isAdmin || false,
                 abandonedHandled: data.abandonedHandled || false,
                 remarketingStage: data.remarketingStage || 0,
