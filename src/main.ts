@@ -101,19 +101,22 @@ export function clearAsaasMigrationFlag() {
 };
 
 /**
- * Se o usuário tem asaasSubscriptionId mas não tem plan='pro' no Firestore,
- * sincroniza com a API do Asaas e retorna o plano real.
+ * Sincroniza com a API do Asaas e retorna o plano real + se ha rastro de
+ * cliente Asaas (mesmo sem assinatura ativa). O flag hasAsaasFootprint e
+ * usado para decidir entre travar na migracao ou enviar para checkout novo.
  */
-async function resolveAsaasUserPlan(user: any, userData: any): Promise<string> {
+async function resolveAsaasUserPlan(user: any, userData: any): Promise<{ plan: string; hasAsaasFootprint: boolean }> {
   const plan = (userData.subscription?.plan || userData.plan || '').toLowerCase();
-  if (plan === 'pro') return 'pro';
+  const initialFootprint = hasAsaasFootprint(userData);
+
+  if (plan === 'pro') return { plan: 'pro', hasAsaasFootprint: initialFootprint };
 
   // Se já é Stripe, não tenta Asaas
   const isStripeUser = Boolean(userData.subscription?.stripeCustomerId);
-  if (isStripeUser) return plan;
+  if (isStripeUser) return { plan, hasAsaasFootprint: initialFootprint };
 
   // Para qualquer usuário sem plan='pro' e sem Stripe, tenta sincronizar pelo Asaas
-  // O backend busca por IDs salvos, e se não achar, busca pelo email
+  // O backend busca por IDs salvos, e se não achar, busca pelo email/CPF
   try {
     const token = await user.getIdToken();
     const res = await fetch(`${getApiBaseUrl()}/api/asaas/sync-subscription`, {
@@ -121,9 +124,13 @@ async function resolveAsaasUserPlan(user: any, userData: any): Promise<string> {
       headers: { Authorization: `Bearer ${token}` },
     });
     const data = await res.json();
-    return (data.plan || plan).toLowerCase();
+    const syncFoundCustomer = Boolean(data?.hasAsaasCustomer || data?.asaasCustomerId);
+    return {
+      plan: (data.plan || plan).toLowerCase(),
+      hasAsaasFootprint: initialFootprint || syncFoundCustomer,
+    };
   } catch (err) {
-    return plan;
+    return { plan, hasAsaasFootprint: initialFootprint };
   }
 }
 
@@ -196,10 +203,12 @@ onAuthStateChanged(auth, async (user) => {
           return;
         }
 
-        // Para usuários sem plan='pro', tenta sincronizar pelo Asaas (busca por IDs ou email)
-        const resolvedPlan = (userData.isAdmin === true || plan === 'pro')
-          ? plan
+        // Para usuários sem plan='pro', tenta sincronizar pelo Asaas (busca por IDs, email ou CPF)
+        const resolveResult = (userData.isAdmin === true || plan === 'pro')
+          ? { plan, hasAsaasFootprint: hasAsaasFootprint(userData) }
           : await resolveAsaasUserPlan(user, userData);
+        const resolvedPlan = resolveResult.plan;
+        const userHasAsaasFootprint = resolveResult.hasAsaasFootprint;
 
         // Persiste flag de admin para que o Header saiba em todas as telas
         if (isAdminUser) {
@@ -277,7 +286,7 @@ onAuthStateChanged(auth, async (user) => {
               setTimeout(() => openTwoFactorPromoModal(), 800);
             }
           }
-        } else if (hasAsaasFootprint(userData)) {
+        } else if (userHasAsaasFootprint) {
           // Usuario com rastro de Asaas mas sem plan='pro' resolvido: libera o sistema
           // forcando-o a Settings → Plano para migrar pro Stripe. Toda outra navegacao
           // sera interceptada e redirecionada de volta para ca enquanto o flag estiver ativo.
