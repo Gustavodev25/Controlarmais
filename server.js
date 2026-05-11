@@ -12,7 +12,7 @@ import { sendEmail, sendOtpEmail, sendWelcomeEmail, sendAbandonedCartEmail } fro
 import Stripe from 'stripe';
 
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY, {
-    apiVersion: '2023-10-16',
+    apiVersion: '2026-02-25.clover',
 }) : null;
 
 // ─────────────────────────────────────────────
@@ -155,6 +155,59 @@ function getSubscriptionMonthlyAmount(sub = {}, data = {}) {
     return isAnnualBillingCycle(sub.billingCycle || sub.frequency || sub.interval)
         ? rawAmount / 12
         : rawAmount;
+}
+
+function formatStripeDateIso(value) {
+    if (!value) return null;
+    const date = value instanceof Date
+        ? value
+        : new Date(typeof value === 'number' ? value * 1000 : value);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function formatStripeDateOnly(value) {
+    const iso = formatStripeDateIso(value);
+    return iso ? iso.split('T')[0] : null;
+}
+
+function normalizeStoredDate(value) {
+    if (!value) return null;
+    if (typeof value?.toDate === 'function') return value.toDate().toISOString();
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value === 'number') {
+        const timestampMs = value > 100000000000 ? value : value * 1000;
+        return new Date(timestampMs).toISOString();
+    }
+    return String(value);
+}
+
+function buildStripeCancellationFields(subscription = {}) {
+    const status = String(subscription?.status || '').toLowerCase();
+    const hasCancellation = Boolean(
+        subscription?.cancel_at_period_end ||
+        subscription?.cancel_at ||
+        subscription?.canceled_at ||
+        subscription?.ended_at ||
+        status === 'canceled'
+    );
+    const cancelAt = hasCancellation
+        ? formatStripeDateIso(subscription?.cancel_at || subscription?.ended_at || subscription?.current_period_end)
+        : null;
+    const canceledAt = hasCancellation ? formatStripeDateIso(subscription?.canceled_at) : null;
+    const endedAt = hasCancellation ? formatStripeDateIso(subscription?.ended_at) : null;
+
+    return {
+        cancelAtPeriodEnd: Boolean(subscription?.cancel_at_period_end),
+        canceledAt,
+        canceledAtDate: canceledAt ? canceledAt.split('T')[0] : null,
+        cancelAt,
+        cancelAtDate: cancelAt ? cancelAt.split('T')[0] : null,
+        endedAt,
+        endedAtDate: endedAt ? endedAt.split('T')[0] : null,
+        cancellationReason: subscription?.cancellation_details?.reason || null,
+        cancellationFeedback: subscription?.cancellation_details?.feedback || null,
+        cancellationComment: subscription?.cancellation_details?.comment || null,
+    };
 }
 
 function findSyncCreditComboById(comboId) {
@@ -1541,6 +1594,10 @@ app.get('/api/admin/users', async (req, res) => {
                 data.valor,
             ].map(parseMoneyValue).find((amount) => amount > 0) || 0;
             const subscriptionMonthlyAmount = getSubscriptionMonthlyAmount(sub, data);
+            const canceledAt = normalizeStoredDate(sub.canceledAt || sub.canceledAtDate);
+            const cancelAt = normalizeStoredDate(sub.cancelAt || sub.cancelAtDate);
+            const endedAt = normalizeStoredDate(sub.endedAt || sub.endedAtDate);
+            const currentPeriodEnd = normalizeStoredDate(sub.currentPeriodEnd || sub.nextBillingDate);
 
             let createdAt = data.createdAt || authUser?.metadata?.creationTime || null;
             if (createdAt && typeof createdAt.toDate === 'function') {
@@ -1568,6 +1625,19 @@ app.get('/api/admin/users', async (req, res) => {
                 billingCycle,
                 subscriptionAmount,
                 subscriptionMonthlyAmount,
+                cancelAtPeriodEnd: Boolean(sub.cancelAtPeriodEnd),
+                autoRenew: sub.autoRenew ?? null,
+                canceledAt,
+                canceledAtDate: sub.canceledAtDate || (canceledAt ? canceledAt.split('T')[0] : null),
+                cancelAt,
+                cancelAtDate: sub.cancelAtDate || (cancelAt ? cancelAt.split('T')[0] : null),
+                endedAt,
+                endedAtDate: sub.endedAtDate || (endedAt ? endedAt.split('T')[0] : null),
+                currentPeriodEnd,
+                nextBillingDate: sub.nextBillingDate || (currentPeriodEnd ? currentPeriodEnd.split('T')[0] : null),
+                cancellationReason: sub.cancellationReason || null,
+                cancellationFeedback: sub.cancellationFeedback || null,
+                cancellationComment: sub.cancellationComment || null,
                 isAdmin: data.isAdmin || false,
                 abandonedHandled: data.abandonedHandled || false,
                 remarketingStage: data.remarketingStage || 0,
@@ -1723,9 +1793,10 @@ app.get('/api/admin/users/:uid/verify-payment', async (req, res) => {
         let providerStatus = null;
         let providerMonthlyAmount = 0;
         let providerBillingCycle = null;
+        let providerCancellationFields = {};
 
         if ((sub.provider === 'stripe' || sub.stripeCustomerId) && stripe && sub.stripeCustomerId) {
-            const stripeSubs = await stripe.subscriptions.list({ customer: sub.stripeCustomerId });
+            const stripeSubs = await stripe.subscriptions.list({ customer: sub.stripeCustomerId, status: 'all' });
             const liveSub = stripeSubs.data.find(s => ['active', 'trialing'].includes(s.status));
             verified = Boolean(liveSub);
             const activeSub = stripeSubs.data.find(s => s.status === 'active');
@@ -1741,6 +1812,10 @@ app.get('/api/admin/users/:uid/verify-payment', async (req, res) => {
                 if (unitAmount > 0) {
                     providerMonthlyAmount = interval === 'year' ? unitAmount / 12 : unitAmount;
                 }
+            }
+            const cancellationRef = ref || stripeSubs.data[0] || null;
+            if (cancellationRef) {
+                providerCancellationFields = buildStripeCancellationFields(cancellationRef);
             }
         } else if ((sub.provider === 'asaas' || sub.asaasCustomerId) && process.env.ASAAS_API_KEY && sub.asaasCustomerId) {
             const asaasUrl = process.env.ASAAS_MODE === 'sandbox' ? 'https://sandbox.asaas.com/api/v3' : 'https://api.asaas.com/v3';
@@ -1766,7 +1841,8 @@ app.get('/api/admin/users/:uid/verify-payment', async (req, res) => {
             paying,
             status: providerStatus,
             monthlyAmount: providerMonthlyAmount,
-            billingCycle: providerBillingCycle
+            billingCycle: providerBillingCycle,
+            ...providerCancellationFields
         });
     } catch (error) {
         return res.status(500).json({ error: error.message || 'Erro ao verificar pagamento.' });
@@ -1839,6 +1915,430 @@ app.delete('/api/admin/users/:uid', async (req, res) => {
 });
 
 /**
+ * GET /api/admin/stats
+ * Estatísticas em tempo real do painel administrativo:
+ *   - assinantes ativos (status active no Stripe ou Asaas)
+ *   - MRR (soma das mensalidades reais)
+ *   - média de dias de uso entre os assinantes ativos
+ */
+app.get('/api/admin/stats', async (req, res) => {
+    const authResult = await verifyFirebaseRequest(req);
+    if (!authResult.ok) return res.status(authResult.status).json({ error: authResult.error });
+    if (!db) return res.status(500).json({ error: 'Firestore nao disponivel.' });
+
+    const callerDoc = await db.collection('users').doc(authResult.uid).get();
+    if (!callerDoc.exists || callerDoc.data()?.isAdmin !== true) {
+        return res.status(403).json({ error: 'Acesso negado. Apenas administradores.' });
+    }
+
+    try {
+        // 1) Carrega usuários do Firestore e cria índices por customerId
+        const usersSnap = await db.collection('users').get();
+        const usersByUid = new Map();
+        const usersByStripeCustomerId = new Map();
+        const usersByAsaasCustomerId = new Map();
+
+        for (const doc of usersSnap.docs) {
+            const data = doc.data();
+            const sub = data.subscription || {};
+            const user = {
+                uid: doc.id,
+                activeDaysCount: Number(data.activeDaysCount) || 0,
+                stripeCustomerId: sub.stripeCustomerId || null,
+                asaasCustomerId: sub.asaasCustomerId || null,
+            };
+            usersByUid.set(doc.id, user);
+            if (user.stripeCustomerId) usersByStripeCustomerId.set(user.stripeCustomerId, user);
+            if (user.asaasCustomerId) usersByAsaasCustomerId.set(user.asaasCustomerId, user);
+        }
+
+        // payingByUid: uid -> { provider, status, monthlyAmount }
+        const payingByUid = new Map();
+
+        const addPaying = (uid, provider, status, monthly, extra = {}) => {
+            if (!uid) return;
+            if (!usersByUid.has(uid)) return; // ignora subs orfãs (usuario deletado)
+            if (payingByUid.has(uid)) return; // dedupe entre provedores
+            payingByUid.set(uid, {
+                uid,
+                provider,
+                status,
+                monthlyAmount: Number((monthly || 0).toFixed(2)),
+                ...extra,
+            });
+        };
+
+        // 2) Assinaturas ativas no Stripe (active + trialing — mesmo criterio do verify-payment)
+        if (stripe) {
+            for (const targetStatus of ['active', 'trialing']) {
+                let hasMore = true;
+                let startingAfter = undefined;
+                while (hasMore) {
+                    const params = { limit: 100, status: targetStatus, expand: ['data.customer'] };
+                    if (startingAfter) params.starting_after = startingAfter;
+
+                    const stripeSubs = await stripe.subscriptions.list(params);
+
+                    for (const sub of stripeSubs.data) {
+                        const customer = sub.customer;
+                        const customerId = typeof customer === 'string' ? customer : customer?.id;
+
+                        let uid = null;
+                        if (typeof customer === 'object' && customer?.metadata?.firebaseUID) {
+                            uid = customer.metadata.firebaseUID;
+                        }
+                        if (!uid && customerId) {
+                            const u = usersByStripeCustomerId.get(customerId);
+                            if (u) uid = u.uid;
+                        }
+                        if (!uid) continue;
+                        if (payingByUid.has(uid)) continue;
+
+                        const item = sub.items?.data?.[0];
+                        const price = item?.price;
+                        const unitAmount = (price?.unit_amount ?? 0) / 100;
+                        const interval = price?.recurring?.interval || null;
+                        const monthly = unitAmount > 0
+                            ? (interval === 'year' ? unitAmount / 12 : unitAmount)
+                            : 0;
+
+                        addPaying(uid, 'stripe', sub.status, monthly, {
+                            ...buildStripeCancellationFields(sub),
+                            currentPeriodEnd: formatStripeDateIso(sub?.current_period_end),
+                            nextBillingDate: formatStripeDateOnly(sub?.current_period_end),
+                        });
+                    }
+
+                    hasMore = stripeSubs.has_more;
+                    if (hasMore && stripeSubs.data.length > 0) {
+                        startingAfter = stripeSubs.data[stripeSubs.data.length - 1].id;
+                    }
+                }
+            }
+        }
+
+        // 3) Assinaturas ativas no Asaas
+        if (ASAAS_API_KEY) {
+            const pageLimit = 100;
+            let offset = 0;
+            let hasMore = true;
+            const maxIterations = 200;
+            let iterations = 0;
+
+            while (hasMore && iterations < maxIterations) {
+                iterations++;
+                const response = await axios.get(`${ASAAS_URL}/subscriptions`, {
+                    headers: asaasHeaders,
+                    params: { status: 'ACTIVE', limit: pageLimit, offset }
+                });
+                const list = response.data?.data || [];
+
+                for (const sub of list) {
+                    const customerId = sub.customer;
+                    if (!customerId) continue;
+                    const u = usersByAsaasCustomerId.get(customerId);
+                    if (!u) continue;
+                    if (payingByUid.has(u.uid)) continue;
+
+                    const rawValue = parseMoneyValue(sub.value);
+                    const cycle = String(sub.cycle || '').toUpperCase();
+                    const monthly = rawValue > 0
+                        ? (cycle === 'YEARLY' ? rawValue / 12 : rawValue)
+                        : 0;
+
+                    addPaying(u.uid, 'asaas', 'active', monthly);
+                }
+
+                hasMore = response.data?.hasMore === true && list.length > 0;
+                offset += pageLimit;
+            }
+        }
+
+        // 4) Média de dias de uso entre os assinantes ativos + MRR
+        let totalDays = 0;
+        let totalMrr = 0;
+        let canceledStripeInMrrCount = 0;
+        for (const [uid, info] of payingByUid) {
+            const u = usersByUid.get(uid);
+            if (!u) continue;
+            totalDays += u.activeDaysCount;
+            totalMrr += info.monthlyAmount;
+            if (info.provider === 'stripe' && (info.cancelAtPeriodEnd || info.cancelAt || info.canceledAt)) {
+                canceledStripeInMrrCount++;
+            }
+        }
+        const avgActiveDays = payingByUid.size > 0
+            ? totalDays / payingByUid.size
+            : 0;
+
+        return res.status(200).json({
+            activeSubscribersCount: payingByUid.size,
+            mrr: Number(totalMrr.toFixed(2)),
+            avgActiveDaysOfPaying: Number(avgActiveDays.toFixed(1)),
+            totalUsers: usersByUid.size,
+            canceledStripeInMrrCount,
+            payingUsers: Array.from(payingByUid.values()),
+            generatedAt: new Date().toISOString(),
+        });
+    } catch (error) {
+        console.error('❌ Erro em /api/admin/stats:', error.response?.data || error.message);
+        return res.status(500).json({ error: error.message || 'Erro ao calcular estatísticas.' });
+    }
+});
+
+/**
+ * Helper: calcula o conjunto de UIDs com assinatura ativa (active/trialing no Stripe
+ * ou ACTIVE no Asaas) cruzando subs ao vivo dos provedores com os usuarios do Firestore.
+ */
+async function computeActivePayingUids() {
+    if (!db) throw new Error('Firestore nao disponivel.');
+
+    const usersSnap = await db.collection('users').get();
+    const usersByUid = new Map();
+    const usersByStripeCustomerId = new Map();
+    const usersByAsaasCustomerId = new Map();
+
+    for (const doc of usersSnap.docs) {
+        const data = doc.data();
+        const sub = data.subscription || {};
+        const user = {
+            uid: doc.id,
+            stripeCustomerId: sub.stripeCustomerId || null,
+            asaasCustomerId: sub.asaasCustomerId || null,
+        };
+        usersByUid.set(doc.id, user);
+        if (user.stripeCustomerId) usersByStripeCustomerId.set(user.stripeCustomerId, user);
+        if (user.asaasCustomerId) usersByAsaasCustomerId.set(user.asaasCustomerId, user);
+    }
+
+    const payingUids = new Set();
+
+    if (stripe) {
+        for (const targetStatus of ['active', 'trialing']) {
+            let hasMore = true;
+            let startingAfter = undefined;
+            while (hasMore) {
+                const params = { limit: 100, status: targetStatus, expand: ['data.customer'] };
+                if (startingAfter) params.starting_after = startingAfter;
+                const stripeSubs = await stripe.subscriptions.list(params);
+                for (const sub of stripeSubs.data) {
+                    const customer = sub.customer;
+                    const customerId = typeof customer === 'string' ? customer : customer?.id;
+                    let uid = null;
+                    if (typeof customer === 'object' && customer?.metadata?.firebaseUID) {
+                        uid = customer.metadata.firebaseUID;
+                    }
+                    if (!uid && customerId) {
+                        const u = usersByStripeCustomerId.get(customerId);
+                        if (u) uid = u.uid;
+                    }
+                    if (uid && usersByUid.has(uid)) payingUids.add(uid);
+                }
+                hasMore = stripeSubs.has_more;
+                if (hasMore && stripeSubs.data.length > 0) {
+                    startingAfter = stripeSubs.data[stripeSubs.data.length - 1].id;
+                }
+            }
+        }
+    }
+
+    if (ASAAS_API_KEY) {
+        const pageLimit = 100;
+        let offset = 0;
+        let hasMore = true;
+        const maxIterations = 200;
+        let iterations = 0;
+        while (hasMore && iterations < maxIterations) {
+            iterations++;
+            const response = await axios.get(`${ASAAS_URL}/subscriptions`, {
+                headers: asaasHeaders,
+                params: { status: 'ACTIVE', limit: pageLimit, offset }
+            });
+            const list = response.data?.data || [];
+            for (const sub of list) {
+                const customerId = sub.customer;
+                if (!customerId) continue;
+                const u = usersByAsaasCustomerId.get(customerId);
+                if (u) payingUids.add(u.uid);
+            }
+            hasMore = response.data?.hasMore === true && list.length > 0;
+            offset += pageLimit;
+        }
+    }
+
+    return { payingUids, usersSnap };
+}
+
+function getStripeSubscriptionSyncRank(sub = {}) {
+    const status = String(sub?.status || '').toLowerCase();
+    if (['active', 'trialing'].includes(status)) return 5;
+    if (['past_due', 'unpaid', 'incomplete'].includes(status)) return 4;
+    if (sub?.cancel_at_period_end) return 3;
+    if (status === 'paused') return 2;
+    if (status === 'canceled') return 1;
+    return 0;
+}
+
+function getStripeSubscriptionSortTime(sub = {}) {
+    return Math.max(
+        Number(sub?.created || 0),
+        Number(sub?.canceled_at || 0),
+        Number(sub?.ended_at || 0),
+        Number(sub?.current_period_end || 0)
+    );
+}
+
+function preferStripeSubscriptionForSync(current, candidate) {
+    if (!current) return candidate;
+    const currentRank = getStripeSubscriptionSyncRank(current.sub);
+    const candidateRank = getStripeSubscriptionSyncRank(candidate.sub);
+    if (candidateRank !== currentRank) {
+        return candidateRank > currentRank ? candidate : current;
+    }
+    return getStripeSubscriptionSortTime(candidate.sub) > getStripeSubscriptionSortTime(current.sub)
+        ? candidate
+        : current;
+}
+
+function buildStripeAdminSubscriptionPayload(sub, customerId) {
+    const status = String(sub?.status || 'unknown').toLowerCase();
+    const item = sub?.items?.data?.[0] || null;
+    const price = item?.price || null;
+    const interval = price?.recurring?.interval || null;
+    const priceDisplay = Number.isFinite(price?.unit_amount)
+        ? (price.unit_amount / 100).toFixed(2).replace('.', ',')
+        : null;
+    const cancellation = buildStripeCancellationFields(sub);
+    const isCurrentlyActive = ['active', 'trialing'].includes(status);
+
+    const subscription = {
+        plan: isCurrentlyActive ? 'pro' : 'free',
+        status,
+        provider: 'stripe',
+        stripeCustomerId: customerId,
+        stripeSubscriptionId: isCurrentlyActive ? sub.id : null,
+        lastStripeSubscriptionId: sub.id,
+        stripePriceId: price?.id || null,
+        currentPeriodEnd: formatStripeDateIso(sub?.current_period_end),
+        nextBillingDate: formatStripeDateOnly(sub?.current_period_end),
+        billingCycle: interval === 'year' ? 'annual' : 'mensal',
+        autoRenew: isCurrentlyActive && !sub?.cancel_at_period_end,
+        ...cancellation,
+    };
+
+    if (priceDisplay) {
+        subscription.price = priceDisplay;
+        subscription.nextAmount = priceDisplay;
+    }
+
+    return subscription;
+}
+
+/**
+ * POST /api/admin/downgrade-non-paying
+ * Rebaixa para plan:'free' todo usuario com plan:'pro' que nao esta ativo no provedor.
+ * Admins sao SEMPRE preservados, independentemente de pagamento.
+ * Query: ?dryRun=1 retorna a contagem sem aplicar.
+ */
+app.post('/api/admin/downgrade-non-paying', async (req, res) => {
+    const authResult = await verifyFirebaseRequest(req);
+    if (!authResult.ok) return res.status(authResult.status).json({ error: authResult.error });
+    if (!db) return res.status(500).json({ error: 'Firestore nao disponivel.' });
+
+    const callerDoc = await db.collection('users').doc(authResult.uid).get();
+    if (!callerDoc.exists || callerDoc.data()?.isAdmin !== true) {
+        return res.status(403).json({ error: 'Acesso negado. Apenas administradores.' });
+    }
+
+    const dryRun = req.query.dryRun === '1' || req.query.dryRun === 'true';
+    const requestedUids = Array.isArray(req.body?.uids) ? req.body.uids.filter(u => typeof u === 'string') : null;
+
+    try {
+        const { payingUids, usersSnap } = await computeActivePayingUids();
+
+        const candidates = [];
+        for (const doc of usersSnap.docs) {
+            const data = doc.data();
+            const uid = doc.id;
+            const plan = String(data.plan || data?.subscription?.plan || 'free').toLowerCase();
+            const isAdmin = data.isAdmin === true;
+
+            if (plan !== 'pro') continue;
+            if (isAdmin) continue;
+            if (payingUids.has(uid)) continue;
+
+            let createdAt = data.createdAt || null;
+            if (createdAt && typeof createdAt.toDate === 'function') createdAt = createdAt.toDate().toISOString();
+            else if (createdAt instanceof Date) createdAt = createdAt.toISOString();
+            else if (typeof createdAt === 'number') createdAt = new Date(createdAt).toISOString();
+
+            let lastLogin = data.lastLogin || null;
+            if (lastLogin && typeof lastLogin.toDate === 'function') lastLogin = lastLogin.toDate().toISOString();
+            else if (lastLogin instanceof Date) lastLogin = lastLogin.toISOString();
+
+            candidates.push({
+                uid,
+                email: data.email || data?.profile?.email || null,
+                name: data.name || data?.profile?.name || null,
+                provider: data?.subscription?.provider || null,
+                status: data?.subscription?.status || null,
+                activeDaysCount: Number(data.activeDaysCount) || 0,
+                createdAt,
+                lastLogin,
+            });
+        }
+
+        if (dryRun) {
+            return res.status(200).json({
+                dryRun: true,
+                wouldDowngrade: candidates.length,
+                candidates,
+            });
+        }
+
+        // Se o cliente mandou uma lista de uids, restringe o downgrade a essa lista
+        // (mas mantem a regra: so quem realmente esta como pro nao pagante nao admin).
+        let targets = candidates;
+        if (requestedUids && requestedUids.length > 0) {
+            const allowed = new Set(candidates.map(c => c.uid));
+            targets = requestedUids
+                .filter(u => allowed.has(u))
+                .map(u => candidates.find(c => c.uid === u));
+        }
+
+        // Aplica em batches (Firestore: ate 500 ops por batch).
+        let updated = 0;
+        const batchSize = 400;
+        for (let i = 0; i < targets.length; i += batchSize) {
+            const batch = db.batch();
+            const slice = targets.slice(i, i + batchSize);
+            for (const c of slice) {
+                const ref = db.collection('users').doc(c.uid);
+                batch.update(ref, {
+                    plan: 'free',
+                    'subscription.plan': 'free',
+                    'subscription.status': 'inactive',
+                    planDowngradedAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                });
+            }
+            await batch.commit();
+            updated += slice.length;
+        }
+
+        console.log(`✅ [downgrade-non-paying] rebaixados=${updated} por admin=${authResult.uid}${requestedUids ? ` (lista=${requestedUids.length})` : ''}`);
+        return res.status(200).json({
+            dryRun: false,
+            downgraded: updated,
+            uids: targets.map(c => c.uid),
+        });
+    } catch (error) {
+        console.error('❌ Erro em /api/admin/downgrade-non-paying:', error.response?.data || error.message);
+        return res.status(500).json({ error: error.message || 'Erro ao rebaixar usuarios nao pagantes.' });
+    }
+});
+
+/**
  * POST /api/admin/stripe/sync-users
  * Puxa todos os clientes/assinaturas do Stripe e sincroniza com o Firestore.
  */
@@ -1862,9 +2362,10 @@ app.post('/api/admin/stripe/sync-users', async (req, res) => {
         // Busca todas as assinaturas do Stripe (com dados do cliente expandidos)
         let hasMore = true;
         let startingAfter = undefined;
+        const subscriptionsByUid = new Map();
 
         while (hasMore) {
-            const params = { limit: 100, expand: ['data.customer'] };
+            const params = { limit: 100, status: 'all', expand: ['data.customer'] };
             if (startingAfter) params.starting_after = startingAfter;
 
             const stripeSubs = await stripe.subscriptions.list(params);
@@ -1894,21 +2395,8 @@ app.post('/api/admin/stripe/sync-users', async (req, res) => {
                         continue;
                     }
 
-                    const plan = (sub.status === 'active' || sub.status === 'trialing') ? 'pro' : 'free';
-                    const status = sub.status; // active, trialing, canceled, past_due, etc.
-
-                    await db.collection('users').doc(uid).set({
-                        subscription: {
-                            plan,
-                            status,
-                            provider: 'stripe',
-                            stripeCustomerId: customerId,
-                            stripeSubscriptionId: sub.id,
-                        },
-                        updatedAt: new Date().toISOString(),
-                    }, { merge: true });
-
-                    synced++;
+                    const current = subscriptionsByUid.get(uid);
+                    subscriptionsByUid.set(uid, preferStripeSubscriptionForSync(current, { uid, customerId, sub }));
                 } catch (subErr) {
                     console.error('[stripe/sync-users] erro em sub:', subErr.message);
                     errors++;
@@ -1918,6 +2406,19 @@ app.post('/api/admin/stripe/sync-users', async (req, res) => {
             hasMore = stripeSubs.has_more;
             if (hasMore && stripeSubs.data.length > 0) {
                 startingAfter = stripeSubs.data[stripeSubs.data.length - 1].id;
+            }
+        }
+
+        for (const { uid, customerId, sub } of subscriptionsByUid.values()) {
+            try {
+                await db.collection('users').doc(uid).set({
+                    subscription: buildStripeAdminSubscriptionPayload(sub, customerId),
+                    updatedAt: new Date().toISOString(),
+                }, { merge: true });
+                synced++;
+            } catch (writeErr) {
+                console.error('[stripe/sync-users] erro ao salvar usuario:', uid, writeErr.message);
+                errors++;
             }
         }
 

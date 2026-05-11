@@ -9,7 +9,7 @@ const router = express.Router();
 
 const stripe = process.env.STRIPE_SECRET_KEY
     ? new Stripe(process.env.STRIPE_SECRET_KEY, {
-        apiVersion: '2023-10-16',
+        apiVersion: '2026-02-25.clover',
     })
     : null;
 
@@ -204,6 +204,35 @@ function formatDateIso(value) {
 function formatDateOnly(value) {
     const isoDate = formatDateIso(value);
     return isoDate ? isoDate.split('T')[0] : null;
+}
+
+function buildStripeCancellationPayload(subscription = {}) {
+    const status = String(subscription?.status || '').toLowerCase();
+    const hasCancellation = Boolean(
+        subscription?.cancel_at_period_end ||
+        subscription?.cancel_at ||
+        subscription?.canceled_at ||
+        subscription?.ended_at ||
+        status === 'canceled'
+    );
+    const cancelAt = hasCancellation
+        ? formatDateIso(subscription?.cancel_at || subscription?.ended_at || subscription?.current_period_end)
+        : null;
+    const canceledAt = hasCancellation ? formatDateIso(subscription?.canceled_at) : null;
+    const endedAt = hasCancellation ? formatDateIso(subscription?.ended_at) : null;
+
+    return {
+        'subscription.cancelAtPeriodEnd': Boolean(subscription?.cancel_at_period_end),
+        'subscription.cancelAt': cancelAt,
+        'subscription.cancelAtDate': cancelAt ? cancelAt.split('T')[0] : null,
+        'subscription.canceledAt': canceledAt,
+        'subscription.canceledAtDate': canceledAt ? canceledAt.split('T')[0] : null,
+        'subscription.endedAt': endedAt,
+        'subscription.endedAtDate': endedAt ? endedAt.split('T')[0] : null,
+        'subscription.cancellationReason': subscription?.cancellation_details?.reason || null,
+        'subscription.cancellationFeedback': subscription?.cancellation_details?.feedback || null,
+        'subscription.cancellationComment': subscription?.cancellation_details?.comment || null,
+    };
 }
 
 function formatAmountDisplayFromCents(amountInCents) {
@@ -503,6 +532,7 @@ async function applyActiveStripeSubscription({
         'subscription.nextBillingDate': nextBillingDate,
         'subscription.cancelAtPeriodEnd': Boolean(subscription?.cancel_at_period_end),
         'subscription.autoRenew': !subscription?.cancel_at_period_end,
+        ...buildStripeCancellationPayload(subscription),
         'subscription.billingCycle': interval === 'year' ? 'annual' : 'mensal',
         'subscription.startDate': formatDateOnly(subscription?.start_date),
         updatedAt: now,
@@ -798,6 +828,7 @@ async function handleInvoicePaymentFailed(invoicePayload) {
         'subscription.nextBillingDate': formatDateOnly(subscription?.current_period_end),
         'subscription.cancelAtPeriodEnd': Boolean(subscription?.cancel_at_period_end),
         'subscription.autoRenew': !subscription?.cancel_at_period_end,
+        ...buildStripeCancellationPayload(subscription),
         updatedAt: new Date().toISOString(),
         ...(paymentMethodSnapshot?.brand ? {
             'subscription.creditCardBrand': paymentMethodSnapshot.brand,
@@ -860,6 +891,7 @@ async function handleSubscriptionUpdated(subscriptionPayload) {
         'subscription.nextBillingDate': formatDateOnly(subscription.current_period_end),
         'subscription.cancelAtPeriodEnd': Boolean(subscription.cancel_at_period_end),
         'subscription.autoRenew': !subscription.cancel_at_period_end,
+        ...buildStripeCancellationPayload(subscription),
         updatedAt: new Date().toISOString(),
         ...(paymentMethodSnapshot?.brand ? {
             'subscription.creditCardBrand': paymentMethodSnapshot.brand,
@@ -890,8 +922,13 @@ async function handleSubscriptionDeleted(subscriptionPayload) {
         'subscription.status': 'inactive',
         'subscription.stripeCustomerId': customerId,
         'subscription.stripeSubscriptionId': null,
+        'subscription.lastStripeSubscriptionId': subscriptionPayload?.id || null,
         'subscription.cancelAtPeriodEnd': false,
         'subscription.autoRenew': false,
+        ...buildStripeCancellationPayload({
+            ...subscriptionPayload,
+            status: subscriptionPayload?.status || 'canceled',
+        }),
         updatedAt: new Date().toISOString(),
     });
 
@@ -1287,6 +1324,7 @@ router.post('/sync-subscription', async (req, res) => {
             'subscription.nextBillingDate': nextBillingDate,
             'subscription.cancelAtPeriodEnd': Boolean(fullSubscription.cancel_at_period_end),
             'subscription.autoRenew': !fullSubscription.cancel_at_period_end,
+            ...buildStripeCancellationPayload(fullSubscription),
             'subscription.billingCycle': interval === 'year' ? 'annual' : 'mensal',
             'subscription.startDate': formatDateOnly(fullSubscription.start_date),
             updatedAt: now,

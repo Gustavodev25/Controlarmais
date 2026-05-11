@@ -90,8 +90,10 @@ function getActiveClientSummary(users: any[]): { count: number; revenue: number 
 
 function updateTableSummary(users: any[]): void {
   const summary = getActiveClientSummary(users);
+  const canceledStripeCount = users.filter(hasStripeCancellation).length;
   const activeCountEl = document.querySelector('.cc-active-client-count');
   const revenueEl = document.querySelector('.cc-active-revenue');
+  const canceledEl = document.querySelector('.cc-stripe-cancel-count');
 
   if (activeCountEl) {
     activeCountEl.textContent = `${summary.count} cliente${summary.count !== 1 ? 's' : ''}`;
@@ -99,6 +101,10 @@ function updateTableSummary(users: any[]): void {
 
   if (revenueEl) {
     revenueEl.textContent = moneyFormatter.format(summary.revenue);
+  }
+
+  if (canceledEl) {
+    canceledEl.textContent = `${canceledStripeCount} usuario${canceledStripeCount !== 1 ? 's' : ''}`;
   }
 }
 
@@ -133,6 +139,95 @@ function fmtDate(dateStr: string | null): string {
   const d = new Date(dateStr.includes('T') ? dateStr : dateStr + 'T00:00:00');
   if (isNaN(d.getTime())) return dateStr;
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function fmtShortDate(dateStr: string | null): string {
+  if (!dateStr || dateStr === 'N/A' || dateStr === 'â€”') return '';
+  const d = new Date(dateStr.includes('T') ? dateStr : dateStr + 'T00:00:00');
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+}
+
+function getStripeCancellationInfo(userItem: any): null | {
+  requestedAt: string | null;
+  effectiveAt: string | null;
+  endedAt: string | null;
+  isInMrr: boolean;
+} {
+  if (userItem.provider !== 'stripe') return null;
+
+  const status = normalizeValue(userItem.providerStatus || userItem.status);
+  const requestedAt = userItem.canceledAt || userItem.canceledAtDate || null;
+  const endedAt = userItem.endedAt || userItem.endedAtDate || null;
+  const effectiveAt = userItem.cancelAt || userItem.cancelAtDate || endedAt || userItem.currentPeriodEnd || userItem.nextBillingDate || null;
+  const hasCancellation = Boolean(
+    userItem.cancelAtPeriodEnd ||
+    requestedAt ||
+    endedAt ||
+    userItem.cancelAt ||
+    userItem.cancelAtDate ||
+    status === 'canceled'
+  );
+
+  if (!hasCancellation) return null;
+
+  return {
+    requestedAt,
+    effectiveAt,
+    endedAt,
+    isInMrr: userItem.isVerified === true && ['active', 'trialing'].includes(status),
+  };
+}
+
+function hasStripeCancellation(userItem: any): boolean {
+  return getStripeCancellationInfo(userItem) !== null;
+}
+
+function renderCancellationNote(userItem: any): string {
+  const info = getStripeCancellationInfo(userItem);
+  if (!info) return '';
+
+  const requestedLabel = info.requestedAt ? fmtDate(info.requestedAt) : 'data nao disponivel';
+  const effectiveLabel = info.effectiveAt ? fmtDate(info.effectiveAt) : null;
+  const requestedShort = info.requestedAt ? fmtShortDate(info.requestedAt) : '--/--';
+  const effectiveShort = info.effectiveAt ? fmtShortDate(info.effectiveAt) : null;
+  const titleParts = [`Cancelou em ${requestedLabel}`];
+  if (effectiveLabel) titleParts.push(`${info.endedAt ? 'Encerrada em' : 'Encerra em'} ${effectiveLabel}`);
+  if (info.isInMrr && effectiveLabel) titleParts.push(`Conta no MRR ate ${effectiveLabel}`);
+
+  return `
+    <span class="cc-cancel-chip" title="${titleParts.join(' | ')}">
+      <span class="cc-cancel-dot"></span>
+      <span class="cc-cancel-main">Cancelou ${requestedShort}</span>
+      ${effectiveShort ? `<span class="cc-cancel-sep"></span><span class="cc-cancel-meta">${info.isInMrr ? 'MRR' : (info.endedAt ? 'Fim' : 'Ate')} ${effectiveShort}</span>` : ''}
+    </span>
+  `;
+}
+
+function renderCancellationModalRows(userItem: any): string {
+  const info = getStripeCancellationInfo(userItem);
+  if (!info) return '';
+
+  const requestedLabel = info.requestedAt ? fmtDate(info.requestedAt) : 'Data nao disponivel';
+  const effectiveLabel = info.effectiveAt ? fmtDate(info.effectiveAt) : 'Data nao disponivel';
+  const mrrLabel = info.isInMrr
+    ? `Sim, ate ${effectiveLabel}`
+    : 'Nao, assinatura ja encerrada/inativa';
+
+  return `
+      <div class="flex justify-between items-center px-4 sm:px-8 py-3 border-b border-[var(--color-border)]/50">
+        <span class="text-[var(--color-text-secondary)]">Cancelou no Stripe</span>
+        <span class="font-medium">${requestedLabel}</span>
+      </div>
+      <div class="flex justify-between items-center px-4 sm:px-8 py-3 border-b border-[var(--color-border)]/50">
+        <span class="text-[var(--color-text-secondary)]">${info.endedAt ? 'Encerrada em' : 'Encerra em'}</span>
+        <span class="font-medium">${effectiveLabel}</span>
+      </div>
+      <div class="flex justify-between items-center px-4 sm:px-8 py-3 border-b border-[var(--color-border)]/50">
+        <span class="text-[var(--color-text-secondary)]">Conta no MRR</span>
+        <span class="font-medium">${mrrLabel}</span>
+      </div>
+  `;
 }
 
 function fmtRelativeTime(dateStr: string | null): { text: string; color: string } {
@@ -170,9 +265,12 @@ function fmtRelativeTime(dateStr: string | null): { text: string; color: string 
 
 function renderRow(userItem: any): string {
   const roleLabel = userItem.isAdmin ? '<span class="cc-badge cc-badge-paid">Admin</span>' : '<span class="cc-badge cc-badge-inactive">Usuário</span>';
-  
-  let planLabel = userItem.plan === 'pro' 
-    ? '<span class="cc-badge cc-badge-paid">Pro</span>' 
+
+  // "Pro" so para quem esta efetivamente pagando (verificado ao vivo no provedor).
+  // Usuarios com plan:'pro' no Firestore mas sem assinatura ativa entram como "Sem plano".
+  const isPaying = userItem.isVerified === true;
+  let planLabel = isPaying
+    ? '<span class="cc-badge cc-badge-paid">Pro</span>'
     : '<span class="cc-badge cc-badge-inactive">Sem plano</span>';
 
   let providerHtml = '<span class="cc-badge cc-badge-inactive">Sistema</span>';
@@ -180,8 +278,6 @@ function renderRow(userItem: any): string {
     providerHtml = `<img src="/assets/logo/assas.png" class="cc-provider-img" title="Asaas" />`;
   } else if (userItem.provider === 'stripe') {
     providerHtml = `<img src="/assets/logo/stripe.png" class="cc-provider-img" title="Stripe" />`;
-  } else if (userItem.plan === 'pro') {
-    providerHtml = `<span class="cc-badge cc-badge-inactive">Legado</span>`;
   }
 
   const targetIcon = userItem.provider === 'asaas' ? verifiedIconAsaas : verifiedIconStripe;
@@ -218,7 +314,12 @@ function renderRow(userItem: any): string {
         </div>
       </td>
       <td>${roleLabel}</td>
-      <td>${planLabel}</td>
+      <td>
+        <div class="cc-plan-cell">
+          ${planLabel}
+          ${renderCancellationNote(userItem)}
+        </div>
+      </td>
       <td>${providerHtml}</td>
       <td>
         ${(() => {
@@ -316,7 +417,7 @@ let filteredUsersGlobal: any[] = [];
 const filters1: FilterOption[] = [
   { id: 'all_status',   label: 'Todos Status' },
   { id: 'active_subs',  label: 'Pagantes' },
-  { id: 'pro',          label: 'Usuários PRO' },
+  { id: 'stripe_canceled', label: 'Cancelaram Stripe' },
 ];
 
 const filters2: FilterOption[] = [
@@ -330,7 +431,12 @@ const filters3: FilterOption[] = [
   { id: 'admins',       label: 'Admins' },
 ];
 
-let activeFilter1 = localStorage.getItem('admin_filter_status') || 'all_status';
+const storedFilter1 = localStorage.getItem('admin_filter_status') || 'all_status';
+// Migracao: o filtro 'pro' foi removido. Se ainda estiver salvo no localStorage, limpa e cai pra 'all_status'.
+let activeFilter1 = storedFilter1 === 'pro' ? 'all_status' : storedFilter1;
+if (storedFilter1 === 'pro') {
+  localStorage.setItem('admin_filter_status', 'all_status');
+}
 let activeFilter2 = localStorage.getItem('admin_filter_provider') || 'all_providers';
 let activeFilter3 = localStorage.getItem('admin_filter_access') || 'all';
 
@@ -344,14 +450,14 @@ function applyFilterAndRender() {
   if (!tbody) return;
 
   filteredUsersGlobal = allUsersGlobal.filter((u: any) => {
-    // Filtro do Grupo 1 (Status/Plano)
+    // Filtro do Grupo 1 (Status)
     const match1 = activeFilter1 === 'all_status' ||
                    (activeFilter1 === 'active_subs' && isPayingClient(u)) ||
-                   (activeFilter1 === 'pro' && u.plan === 'pro');
-    
+                   (activeFilter1 === 'stripe_canceled' && hasStripeCancellation(u));
+
     // Filtro do Grupo 2 (Provedor)
     const match2 = activeFilter2 === 'all_providers' || u.provider === activeFilter2;
-    
+
     // Filtro do Grupo 3 (Geral/Admin)
     const match3 = activeFilter3 === 'all' || (activeFilter3 === 'admins' && u.isAdmin === true);
 
@@ -491,6 +597,288 @@ function attachUserActionListeners() {
     });
 }
 
+function renderNonPayingProRows(candidates: any[]): string {
+  if (candidates.length === 0) {
+    return `
+      <tr>
+        <td colspan="5" style="padding:32px 0;text-align:center;color:var(--color-text-secondary);font-size:13px;">
+          Nenhum usuário PRO sem assinatura ativa.
+        </td>
+      </tr>
+    `;
+  }
+  return candidates.map((c: any) => {
+    const provider = c.provider === 'asaas'
+      ? `<img src="/assets/logo/assas.png" class="cc-provider-img" title="Asaas" />`
+      : c.provider === 'stripe'
+        ? `<img src="/assets/logo/stripe.png" class="cc-provider-img" title="Stripe" />`
+        : `<span class="cc-badge cc-badge-inactive">Sistema</span>`;
+    const days = Number(c.activeDaysCount) || 0;
+    const rel = fmtRelativeTime(c.lastLogin);
+    const name = c.name || c.email || c.uid;
+    const email = c.email || '—';
+    return `
+      <tr data-uid="${c.uid}">
+        <td style="width:36px;padding-right:0;">
+          <label class="np-checkbox-wrap" style="display:inline-flex;align-items:center;cursor:pointer;">
+            <input type="checkbox" class="np-row-check" data-uid="${c.uid}" checked
+              style="width:16px;height:16px;cursor:pointer;accent-color:#ef4444;" />
+          </label>
+        </td>
+        <td>
+          <div style="display:flex;flex-direction:column;gap:2px;min-width:0;">
+            <span style="font-weight:500;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;" title="${name}">${name}</span>
+            <span style="font-size:11.5px;color:var(--color-text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;" title="${email}">${email}</span>
+          </div>
+        </td>
+        <td>${provider}</td>
+        <td style="font-size:12px;color:var(--color-text-secondary);white-space:nowrap;">
+          ${days > 0 ? `${days} dia${days !== 1 ? 's' : ''}` : 'Sem registros'}
+        </td>
+        <td style="font-size:12px;color:${rel.color};white-space:nowrap;">${rel.text}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+async function handleDowngradeNonPaying(): Promise<void> {
+  let triggerBtn: HTMLButtonElement | null = null;
+  try {
+    triggerBtn = document.getElementById('btn-downgrade-non-paying') as HTMLButtonElement | null;
+    if (triggerBtn) {
+      triggerBtn.disabled = true;
+      triggerBtn.style.opacity = '0.5';
+    }
+
+    const user = auth.currentUser;
+    if (!user) throw new Error('Não autenticado.');
+    const token = await user.getIdToken();
+
+    const dryRes = await fetch(`${API_BASE}/api/admin/downgrade-non-paying?dryRun=1`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!dryRes.ok) {
+      const err = await dryRes.json().catch(() => ({ error: dryRes.statusText }));
+      throw new Error(err.error || 'Falha ao calcular candidatos.');
+    }
+    const dryData = await dryRes.json();
+    const count = dryData.wouldDowngrade || 0;
+    const candidates: any[] = dryData.candidates || [];
+
+    // Selecionados (default: todos marcados)
+    const selectedUids = new Set<string>(candidates.map(c => c.uid));
+
+    const content = `
+      <style>
+        .np-modal-header {
+          padding: 16px 20px;
+          border-bottom: 1px solid var(--color-border-light);
+          flex-shrink: 0;
+        }
+        .np-modal-toolbar {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 10px 20px;
+          border-bottom: 1px solid var(--color-border-light);
+          background: var(--color-surface);
+          flex-shrink: 0;
+        }
+        .np-modal-toolbar-left {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 12px;
+          color: var(--color-text-secondary);
+        }
+        .np-toolbar-btn {
+          background: transparent;
+          border: 1px solid var(--color-border);
+          border-radius: 6px;
+          padding: 4px 10px;
+          font-size: 11.5px;
+          font-weight: 500;
+          color: var(--color-text-secondary);
+          cursor: pointer;
+          transition: background 0.15s, color 0.15s;
+        }
+        .np-toolbar-btn:hover {
+          color: var(--color-text);
+          background: var(--color-surface-hover);
+        }
+        .np-modal-scroll {
+          overflow-y: auto;
+          overflow-x: auto;
+          max-height: min(50vh, 420px);
+        }
+        .np-modal-scroll .cc-table {
+          min-width: 0;
+        }
+        .np-modal-scroll .cc-table thead th {
+          position: sticky;
+          top: 0;
+          background: var(--color-surface);
+          z-index: 1;
+          box-shadow: inset 0 -1px 0 var(--color-border);
+        }
+        .np-modal-shell {
+          display: block;
+        }
+      </style>
+      <div class="np-modal-shell">
+        <div class="np-modal-header">
+          <p style="font-size:13px;color:var(--color-text-secondary);line-height:1.5;margin:0;">
+            ${count === 0
+              ? 'Nenhum usuário PRO sem assinatura ativa encontrado.'
+              : `<strong style="color:var(--color-text);">${count}</strong> usuário${count !== 1 ? 's' : ''} com plano PRO no Firestore <strong>sem assinatura ativa</strong> no Stripe/Asaas. Desmarque quem você quer preservar. Admins já são preservados automaticamente.`}
+          </p>
+        </div>
+        ${count > 0 ? `
+        <div class="np-modal-toolbar">
+          <div class="np-modal-toolbar-left">
+            <span id="np-selected-count">${count} selecionado${count !== 1 ? 's' : ''}</span>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button type="button" class="np-toolbar-btn" id="np-select-all">Marcar todos</button>
+            <button type="button" class="np-toolbar-btn" id="np-select-none">Desmarcar todos</button>
+          </div>
+        </div>
+        ` : ''}
+        <div class="np-modal-scroll">
+          <table class="cc-table" style="width:100%;">
+            <thead>
+              <tr>
+                <th style="width:36px;padding-right:0;">
+                  ${count > 0 ? `<input type="checkbox" id="np-header-check" checked style="width:16px;height:16px;cursor:pointer;accent-color:#ef4444;" />` : ''}
+                </th>
+                <th>Usuário</th>
+                <th>Provedor</th>
+                <th>Dias de uso</th>
+                <th>Último acesso</th>
+              </tr>
+            </thead>
+            <tbody id="np-table-body">
+              ${renderNonPayingProRows(candidates)}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+
+    Modal({
+      title: 'PROs não pagantes',
+      content,
+      maxWidth: 'max-w-2xl',
+      fieldsPadding: 'p-0',
+      showCancel: true,
+      cancelText: 'Fechar',
+      showConfirm: count > 0,
+      confirmText: count > 0 ? `Rebaixar ${count} para Free` : 'Rebaixar',
+      onConfirm: async () => {
+        const uids = Array.from(selectedUids);
+        if (uids.length === 0) {
+          toaster.create({ title: 'Nada selecionado', description: 'Marque ao menos um usuário.', type: 'message' });
+          throw new Error('Nada selecionado');
+        }
+        const u2 = auth.currentUser;
+        if (!u2) throw new Error('Não autenticado.');
+        const t2 = await u2.getIdToken();
+        const r = await fetch(`${API_BASE}/api/admin/downgrade-non-paying`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${t2}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ uids })
+        });
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({ error: r.statusText }));
+          throw new Error(err.error || 'Falha no rebaixamento.');
+        }
+        const data = await r.json();
+        const n = data.downgraded || 0;
+        toaster.create({
+          title: 'Concluído',
+          description: `${n} usuário${n !== 1 ? 's' : ''} rebaixado${n !== 1 ? 's' : ''} para Free.`,
+          type: 'success'
+        });
+        loadSubscriptions();
+      }
+    });
+
+    // Listeners de selecao (rodam apos o modal estar no DOM)
+    setTimeout(() => {
+      const submitBtn = document.querySelector<HTMLButtonElement>('button[type="submit"]');
+      const countEl = document.getElementById('np-selected-count');
+      const headerCheck = document.getElementById('np-header-check') as HTMLInputElement | null;
+
+      const updateUi = () => {
+        const n = selectedUids.size;
+        if (countEl) countEl.textContent = `${n} selecionado${n !== 1 ? 's' : ''}`;
+        if (submitBtn) {
+          submitBtn.textContent = n > 0 ? `Rebaixar ${n} para Free` : 'Rebaixar';
+          submitBtn.disabled = n === 0;
+          submitBtn.style.opacity = n === 0 ? '0.5' : '';
+        }
+        if (headerCheck) {
+          headerCheck.checked = n === candidates.length && candidates.length > 0;
+          headerCheck.indeterminate = n > 0 && n < candidates.length;
+        }
+      };
+
+      document.querySelectorAll<HTMLInputElement>('.np-row-check').forEach(cb => {
+        cb.addEventListener('change', () => {
+          const uid = cb.dataset.uid!;
+          if (cb.checked) selectedUids.add(uid);
+          else selectedUids.delete(uid);
+          updateUi();
+        });
+      });
+
+      headerCheck?.addEventListener('change', () => {
+        const checked = headerCheck.checked;
+        document.querySelectorAll<HTMLInputElement>('.np-row-check').forEach(cb => {
+          cb.checked = checked;
+          const uid = cb.dataset.uid!;
+          if (checked) selectedUids.add(uid);
+          else selectedUids.delete(uid);
+        });
+        updateUi();
+      });
+
+      document.getElementById('np-select-all')?.addEventListener('click', () => {
+        document.querySelectorAll<HTMLInputElement>('.np-row-check').forEach(cb => {
+          cb.checked = true;
+          selectedUids.add(cb.dataset.uid!);
+        });
+        updateUi();
+      });
+
+      document.getElementById('np-select-none')?.addEventListener('click', () => {
+        document.querySelectorAll<HTMLInputElement>('.np-row-check').forEach(cb => {
+          cb.checked = false;
+        });
+        selectedUids.clear();
+        updateUi();
+      });
+    }, 50);
+  } catch (err: any) {
+    if (err?.message !== 'Nada selecionado') {
+      toaster.create({
+        title: 'Erro',
+        description: err?.message || 'Falha ao listar não pagantes.',
+        type: 'error'
+      });
+    }
+  } finally {
+    if (triggerBtn) {
+      triggerBtn.disabled = false;
+      triggerBtn.style.opacity = '';
+    }
+  }
+}
+
 async function loadSubscriptions(): Promise<void> {
   const container = document.getElementById('admin-subscriptions-content-area');
   if (!container) return;
@@ -530,13 +918,17 @@ async function loadSubscriptions(): Promise<void> {
           </div>
           <div class="cc-table-header-right">
             <div class="cc-table-kpis" aria-label="Resumo de clientes ativos">
-              <div class="cc-table-kpi" title="Apenas usuários com assinatura ativa verificada no Stripe ou Asaas (exclui trial e legados não pagantes).">
+              <div class="cc-table-kpi" title="Usuários com assinatura active ou trialing verificada ao vivo no Stripe ou Asaas. Mesma fonte do Painel Administrativo.">
                 <span class="cc-table-kpi-label">Pagantes</span>
                 <strong class="cc-table-kpi-value cc-active-client-count">0 clientes</strong>
               </div>
-              <div class="cc-table-kpi" title="Soma do valor mensal real cobrado no provedor para os clientes pagantes.">
+              <div class="cc-table-kpi" title="Soma do valor mensal real cobrado no provedor para os assinantes ativos.">
                 <span class="cc-table-kpi-label">Receita/mês</span>
                 <strong class="cc-table-kpi-value cc-active-revenue">${moneyFormatter.format(0)}</strong>
+              </div>
+              <div class="cc-table-kpi" title="Usuarios Stripe com cancelamento solicitado. Se ainda estiverem active/trialing, continuam no MRR ate o fim do periodo pago.">
+                <span class="cc-table-kpi-label">Cancelaram Stripe</span>
+                <strong class="cc-table-kpi-value cc-stripe-cancel-count">0 usuarios</strong>
               </div>
             </div>
             <div class="cc-header-sep"></div>
@@ -548,6 +940,11 @@ async function loadSubscriptions(): Promise<void> {
               ${allUsersGlobal.length} usuário${allUsersGlobal.length !== 1 ? 's' : ''}
             </span>
             <div class="cc-header-sep"></div>
+            <button id="btn-downgrade-non-paying" class="cc-action-btn" title="Remover PRO de não pagantes (preserva admins)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+              </svg>
+            </button>
             <button id="btn-refresh-subs" class="cc-action-btn" title="Atualizar">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
@@ -578,86 +975,81 @@ async function loadSubscriptions(): Promise<void> {
     `;
 
     document.getElementById('btn-refresh-subs')?.addEventListener('click', loadSubscriptions);
+    document.getElementById('btn-downgrade-non-paying')?.addEventListener('click', handleDowngradeNonPaying);
 
     // Apply current filters after load
     applyFilterAndRender();
 
-    // Check verified status lazily for users with stripe or asaas provider
-    const usersToVerify = allUsersGlobal.filter(u =>
-      (u.provider === 'stripe' || u.provider === 'asaas') && u.isVerified === undefined
-    );
-    let pendingVerifications = usersToVerify.length;
+    // Verificacao em lote via /api/admin/stats (fonte unica de verdade)
+    const verifyIndicator = document.getElementById('verify-loading-indicator');
+    if (verifyIndicator) verifyIndicator.style.display = 'flex';
 
-    if (pendingVerifications > 0) {
-      const verifyIndicator = document.getElementById('verify-loading-indicator');
-      if (verifyIndicator) verifyIndicator.style.display = 'flex';
-    }
-
-    const onVerifySettled = () => {
-      pendingVerifications--;
-      if (pendingVerifications <= 0) {
-        const verifyIndicator = document.getElementById('verify-loading-indicator');
-        if (verifyIndicator) verifyIndicator.style.display = 'none';
-      }
-    };
-
-    usersToVerify.forEach(u => {
-      fetch(`${API_BASE}/api/admin/users/${u.uid}/verify-payment`, {
+    try {
+      const statsRes = await fetch(`${API_BASE}/api/admin/stats`, {
         headers: { 'Authorization': `Bearer ${token}` }
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.verified) {
+      });
+      if (!statsRes.ok) throw new Error('Falha ao buscar stats.');
+      const statsData = await statsRes.json();
+      type PayingUserInfo = {
+        uid: string;
+        provider: string;
+        status: string;
+        monthlyAmount: number;
+        cancelAtPeriodEnd?: boolean;
+        canceledAt?: string | null;
+        canceledAtDate?: string | null;
+        cancelAt?: string | null;
+        cancelAtDate?: string | null;
+        endedAt?: string | null;
+        endedAtDate?: string | null;
+        currentPeriodEnd?: string | null;
+        nextBillingDate?: string | null;
+      };
+      const payingUsers: Array<PayingUserInfo> = statsData.payingUsers || [];
+
+      const payingByUid = new Map<string, PayingUserInfo>();
+      payingUsers.forEach((p) => payingByUid.set(p.uid, p));
+
+      allUsersGlobal.forEach((u: any) => {
+        const info = payingByUid.get(u.uid);
+        if (info) {
           u.isVerified = true;
-          u.isPaying = data.paying === true;
-          if (data.status) u.providerStatus = data.status;
-          if (typeof data.monthlyAmount === 'number' && data.monthlyAmount > 0) {
-            u.verifiedMonthlyAmount = data.monthlyAmount;
+          u.isPaying = ['active', 'trialing'].includes(normalizeValue(info.status));
+          u.providerStatus = info.status;
+          u.verifiedMonthlyAmount = info.monthlyAmount;
+          u.cancelAtPeriodEnd = info.cancelAtPeriodEnd ?? u.cancelAtPeriodEnd;
+          u.canceledAt = info.canceledAt ?? u.canceledAt;
+          u.canceledAtDate = info.canceledAtDate ?? u.canceledAtDate;
+          u.cancelAt = info.cancelAt ?? u.cancelAt;
+          u.cancelAtDate = info.cancelAtDate ?? u.cancelAtDate;
+          u.endedAt = info.endedAt ?? u.endedAt;
+          u.endedAtDate = info.endedAtDate ?? u.endedAtDate;
+          u.currentPeriodEnd = info.currentPeriodEnd ?? u.currentPeriodEnd;
+          u.nextBillingDate = info.nextBillingDate ?? u.nextBillingDate;
+          if (info.provider && u.provider !== info.provider) {
+            u.provider = info.provider;
           }
-          const finalIcon = u.provider === 'asaas' ? verifiedIconAsaas : verifiedIconStripe;
-          document.querySelectorAll(`.user-verify-badge-${u.uid}`).forEach(el => {
-            (el as HTMLElement).style.display = 'inline-flex';
-            (el as HTMLElement).innerHTML = finalIcon;
-          });
-          // Update the data-user stored string on the info button
-          document.querySelectorAll(`button[data-uid="${u.uid}"].user-btn-info`).forEach(btn => {
-            try {
-              const uData = JSON.parse(btn.getAttribute('data-user') || '{}');
-              uData.isVerified = true;
-              uData.isPaying = u.isPaying;
-              uData.providerStatus = u.providerStatus;
-              uData.verifiedMonthlyAmount = u.verifiedMonthlyAmount;
-              btn.setAttribute('data-user', JSON.stringify(uData));
-            } catch(e){}
-          });
         } else {
           u.isVerified = false;
           u.isPaying = false;
-          document.querySelectorAll(`.user-verify-badge-${u.uid}`).forEach(el => {
-            (el as HTMLElement).style.display = 'none';
-          });
         }
-        if (activeFilter1 === 'active_subs') {
-          applyFilterAndRender();
-        } else {
-          updateTableSummary(filteredUsersGlobal);
-        }
-        onVerifySettled();
-      })
-      .catch(() => {
-        u.isVerified = false;
-        u.isPaying = false;
-        document.querySelectorAll(`.user-verify-badge-${u.uid}`).forEach(el => {
-           (el as HTMLElement).style.display = 'none';
-        });
-        if (activeFilter1 === 'active_subs') {
-          applyFilterAndRender();
-        } else {
-          updateTableSummary(filteredUsersGlobal);
-        }
-        onVerifySettled();
       });
-    });
+
+      // Re-render com os flags atualizados
+      applyFilterAndRender();
+    } catch (statsErr) {
+      console.error('[AdminSubscriptions] erro ao buscar stats:', statsErr);
+      // Marca todos como nao verificados em caso de falha
+      allUsersGlobal.forEach((u: any) => {
+        if (u.isVerified === undefined) {
+          u.isVerified = false;
+          u.isPaying = false;
+        }
+      });
+      applyFilterAndRender();
+    } finally {
+      if (verifyIndicator) verifyIndicator.style.display = 'none';
+    }
 
   } catch (err: any) {
     container.innerHTML = `
@@ -742,6 +1134,7 @@ function showUserModal(userItem: any) {
             `<span class="capitalize font-medium">Sistema / Base</span>`}
         </div>
       </div>
+      ${renderCancellationModalRows(userItem)}
       <div class="flex justify-between items-center px-4 sm:px-8 py-3">
         <span class="text-[var(--color-text-secondary)]">Status (Sistema de Pag.)</span>
         <span class="capitalize font-medium">${userItem.status === 'unknown' ? 'Não aplicável' : userItem.status}</span>
@@ -923,6 +1316,58 @@ export function renderAdminSubscriptions(user: any) {
         .cc-badge-pending { color: var(--color-text); }
         .cc-badge-charge  { color: var(--color-text); }
         .cc-badge-inactive { color: var(--color-text); opacity: 0.8; }
+
+        .cc-plan-cell {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 4px;
+          min-width: 112px;
+        }
+        .cc-cancel-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          max-width: 172px;
+          height: 24px;
+          padding: 3px 8px;
+          border-radius: 12px;
+          border: 1px solid var(--color-border);
+          background: color-mix(in srgb, var(--color-surface) 86%, transparent);
+          color: var(--color-text-secondary);
+          font-size: 10.5px;
+          font-weight: 600;
+          line-height: 1;
+          white-space: nowrap;
+          overflow: hidden;
+          backdrop-filter: blur(10px);
+        }
+        .cc-cancel-dot {
+          width: 5px;
+          height: 5px;
+          border-radius: 999px;
+          background: #ef4444;
+          box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12);
+          flex-shrink: 0;
+        }
+        .cc-cancel-main,
+        .cc-cancel-meta {
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .cc-cancel-main {
+          color: var(--color-text);
+        }
+        .cc-cancel-meta {
+          color: var(--color-text-secondary);
+        }
+        .cc-cancel-sep {
+          width: 1px;
+          height: 10px;
+          background: var(--color-border);
+          flex-shrink: 0;
+        }
 
         /* Category / provider pill */
         .cc-category {
