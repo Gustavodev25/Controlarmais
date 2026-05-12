@@ -641,7 +641,7 @@ export function attachTopbarLandingListeners() {
       if (iosAnim) iosAnim.kill();
 
       iosAnim = gsap.timeline({
-        onComplete: () => gsap.set(iosDropdown, { display: 'none' }),
+        onComplete: () => { gsap.set(iosDropdown, { display: 'none' }); },
       });
 
       if (iosItem) {
