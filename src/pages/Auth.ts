@@ -129,108 +129,87 @@ class AuthManager {
     const contentDiv = document.getElementById('dynamic-content');
     if (!containerDiv || !contentDiv) return;
 
-    // Kill previous animation
     if (this.animation) {
       this.animation.kill();
       this.animation = null;
     }
 
+    // ─── CLOSE: apenas o conteúdo dissolve, card faz squish sutil ────────────
+    await gsap.timeline()
+      .to(contentDiv, {
+        opacity: 0,
+        filter: 'blur(6px)',
+        y: -8,
+        scale: 0.95,
+        duration: 0.18,
+        ease: 'power2.in',
+      }, 0)
+      .to(containerDiv, {
+        scaleX: 1.014,
+        scaleY: 0.974,
+        duration: 0.18,
+        ease: 'power2.in',
+      }, 0);
+
+    // ─── Troca conteúdo e mede nova altura ───────────────────────────────────
     const oldHeight = containerDiv.offsetHeight;
-    containerDiv.style.height = `${oldHeight}px`;
 
-    // ─── CLOSE PHASE ─────────────────────────────────────────────────────────
-    const closeAnim = gsap.timeline();
-
-    // Content dissolve with blur
-    closeAnim.to(contentDiv, {
-      opacity: 0,
-      filter: 'blur(8px)',
-      transform: 'scale(0.92) translateY(-12px)',
-      duration: 0.2,
-      ease: 'power2.in'
-    }, 0);
-
-    // Container collapse
-    closeAnim.to(containerDiv, {
-      borderRadius: '100px',
-      duration: 0.25,
-      ease: 'power2.in'
-    }, 0.05);
-
-    await new Promise(r => setTimeout(r, 250));
-
-    // Update content
+    contentDiv.style.visibility = 'hidden';
     contentDiv.innerHTML = this.getAuthHTML();
 
-    // ─── OPEN PHASE ──────────────────────────────────────────────────────────
-    const openAnim = gsap.timeline();
-
-    // Get new height - force layout recalculation
     containerDiv.style.height = 'auto';
-    containerDiv.style.overflow = 'visible';
-    containerDiv.style.display = 'block';
-    // Force reflow to get accurate height
     void containerDiv.offsetHeight;
     const newHeight = containerDiv.scrollHeight;
-
-    // Reset to old height without animation
-    containerDiv.style.transition = 'none';
     containerDiv.style.height = `${oldHeight}px`;
     containerDiv.style.overflow = 'hidden';
-
-    // Trigger reflow
     void containerDiv.offsetHeight;
 
-    // Container expand - 3 phase liquid expansion
-    // Phase A: Horizontal stretch (blob shape)
-    openAnim.to(containerDiv, {
-      height: `${newHeight * 1.12}px`,
-      borderRadius: '28px',
-      duration: 0.15,
-      ease: 'power3.out'
-    }, 0);
+    // Set initial GSAP states BEFORE restoring visibility to avoid one-frame flash
+    gsap.set(contentDiv, { opacity: 0, filter: 'blur(6px)', y: 10, scale: 0.95 });
 
-    // Phase B: Vertical adjust with overshoot
-    openAnim.to(containerDiv, {
-      height: `${newHeight * 1.04}px`,
-      borderRadius: '20px',
-      duration: 0.22,
-      ease: 'power3.out'
-    });
-
-    // Phase C: Elastic settle
-    openAnim.to(containerDiv, {
-      height: `${newHeight}px`,
-      borderRadius: '12px',
-      duration: 0.6,
-      ease: 'elastic.out(1.15, 0.42)',
-      onComplete: () => {
-        containerDiv.style.overflow = 'hidden';
-      }
-    });
-
-    // Content materialize
-    openAnim.to(contentDiv, {
-      opacity: 1,
-      filter: 'blur(0px)',
-      transform: 'scale(1) translateY(0px)',
-      duration: 0.35,
-      ease: 'power3.out',
-      clearProps: 'all'
-    }, 0.18);
-
-    // Cascade items
     const formItems = contentDiv.querySelectorAll('form > *');
     if (formItems.length > 0) {
-      openAnim.to(formItems, {
+      gsap.set(formItems, { opacity: 0, y: 6 });
+    }
+
+    contentDiv.style.visibility = '';
+
+    // ─── OPEN: altura elástica, escala volta ao normal ────────────────────────
+    const openTl = gsap.timeline({
+      onComplete: () => {
+        containerDiv.style.height = 'auto';
+        containerDiv.style.overflow = 'hidden';
+      },
+    });
+
+    openTl.to(containerDiv, {
+      scaleX: 1,
+      scaleY: 1,
+      height: newHeight,
+      boxShadow: '0 4px 30px rgba(0,0,0,0.5)',
+      duration: 0.75,
+      ease: 'elastic.out(0.9, 0.52)',
+    }, 0);
+
+    openTl.to(contentDiv, {
+      opacity: 1,
+      filter: 'blur(0px)',
+      y: 0,
+      scale: 1,
+      duration: 0.32,
+      ease: 'power3.out',
+      clearProps: 'opacity,filter,transform',
+    }, 0.14);
+
+    if (formItems.length > 0) {
+      openTl.to(formItems, {
         opacity: 1,
-        filter: 'blur(0px)',
-        transform: 'translateY(0px)',
-        duration: 0.28,
-        stagger: { each: 0.04, ease: 'power1.in' },
+        y: 0,
+        duration: 0.24,
+        stagger: 0.04,
         ease: 'power3.out',
-        clearProps: 'all'
-      }, 0.24);
+        clearProps: 'opacity,transform',
+      }, 0.2);
     }
 
     this.saveState();
@@ -255,6 +234,9 @@ class AuthManager {
       e.preventDefault();
       renderPasswordRecovery();
     });
+
+    const submitBtn = document.querySelector<HTMLButtonElement>('#auth-form button[type="submit"]');
+    if (submitBtn) this.setupAuthButtonMorph(submitBtn);
 
     // Password toggles
     const passwordToggles = document.querySelectorAll('.password-toggle');
@@ -393,27 +375,89 @@ class AuthManager {
     }
   }
 
+  private setupAuthButtonMorph(btn: HTMLButtonElement) {
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (reduceMotion) {
+      btn.addEventListener('mouseenter', () => { btn.style.backgroundColor = '#E2886A'; });
+      btn.addEventListener('mouseleave', () => { btn.style.backgroundColor = '#D97757'; });
+      return;
+    }
+
+    gsap.set(btn, { transformOrigin: 'center center', borderRadius: 8 });
+
+    const onEnter = () => {
+      if (btn.disabled) return;
+      gsap.killTweensOf(btn);
+      gsap.to(btn, {
+        scaleX: 1.045,
+        scaleY: 0.965,
+        y: -2,
+        borderRadius: 14,
+        backgroundColor: '#E2886A',
+        boxShadow: '0 12px 30px rgba(217,119,87,0.35)',
+        duration: 0.44,
+        ease: 'elastic.out(0.9, 0.46)',
+      });
+    };
+
+    const onLeave = () => {
+      if (btn.disabled) return;
+      gsap.killTweensOf(btn);
+      gsap.to(btn, {
+        scaleX: 1,
+        scaleY: 1,
+        y: 0,
+        borderRadius: 8,
+        backgroundColor: '#D97757',
+        boxShadow: '0 4px 15px rgba(217,119,87,0.2)',
+        duration: 0.68,
+        ease: 'elastic.out(0.85, 0.5)',
+      });
+    };
+
+    const onDown = () => {
+      if (btn.disabled) return;
+      gsap.killTweensOf(btn);
+      gsap.to(btn, {
+        scaleX: 0.97,
+        scaleY: 1.06,
+        y: 0,
+        borderRadius: 18,
+        duration: 0.14,
+        ease: 'power3.out',
+      });
+    };
+
+    btn.addEventListener('mouseenter', onEnter);
+    btn.addEventListener('mouseleave', onLeave);
+    btn.addEventListener('pointerdown', onDown);
+    btn.addEventListener('pointerup', onEnter);
+    btn.addEventListener('pointercancel', onLeave);
+  }
+
   render() {
     themeManager.forceDark();
     document.documentElement.style.overflowX = 'hidden';
     document.body.style.overflowX = 'hidden';
     const app = document.querySelector<HTMLDivElement>('#app')!;
     app.innerHTML = `
-      <div class="min-h-screen w-full flex flex-col items-center justify-center text-white p-4 relative overflow-x-hidden">
+      <div style="min-height: 100vh; width: 100%; background-color: #0C0C0C; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; padding: 16px; position: relative; overflow-x: hidden;">
         ${BrilhoHeader()}
-        <div class="w-16 h-16 rounded-[22px] bg-[#141414] border border-[#2B2B2B] shadow-2xl flex items-center justify-center absolute top-8 z-10 overflow-hidden">
+        <div class="w-16 h-16 rounded-[22px] flex items-center justify-center absolute top-8 z-10 overflow-hidden"
+          style="background: rgba(255,255,255,0.06); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.12); box-shadow: 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);">
           <img src="/assets/logo/logocomfundo.png" alt="Logo" class="w-full h-full object-cover transition-transform duration-500 hover:scale-110 filter brightness-[1.15]" style="will-change: transform;">
         </div>
 
-        <div class="w-full flex flex-col justify-center items-center shrink-0 p-4">
-          <div id="dynamic-container" class="rounded-[24px] shadow-lg w-full max-w-md overflow-hidden relative" style="background: #181818; border: 1px solid #2B2B2B; will-change: height; transition: height 0.6s cubic-bezier(0.32, 0.72, 0, 1), transform 0.6s cubic-bezier(0.32, 0.72, 0, 1);">
-            <div id="dynamic-content" class="p-7 w-full transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]">
+        <div style="width: 100%; max-width: 448px; display: flex; flex-direction: column; align-items: center; padding: 16px;">
+          <div id="dynamic-container" style="background: #111111; border: 1px solid #222222; border-radius: 24px; box-shadow: 0 4px 30px rgba(0,0,0,0.5); width: 100%; overflow: hidden; position: relative; z-index: 1; will-change: transform, border-radius, box-shadow;">
+            <div id="dynamic-content" style="padding: 28px; width: 100%;">
               ${this.getAuthHTML()}
             </div>
           </div>
         </div>
 
-        <p class="absolute bottom-8 text-white/20 text-[10px] uppercase tracking-widest pointer-events-none">
+        <p style="position: absolute; bottom: 32px; color: rgba(255,255,255,0.2); font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; pointer-events: none;">
           © 2026 Controlar+ — Todos os direitos reservados
         </p>
       </div>

@@ -138,6 +138,14 @@ function renderAuth() {
   authManager.render();
 }
 
+export function handlePublicRouting() {
+  if (currentUser) return;
+  renderLanding();
+}
+
+// Ouvinte para mudanças de rota no hash (ex: ao clicar no botão de baixar iOS ou voltar)
+window.addEventListener('hashchange', handlePublicRouting);
+
 // Rotas públicas legais usadas pela App Store não entram no fluxo de autenticação.
 if (publicLegalPage) {
   renderLegalPage(publicLegalPage);
@@ -338,8 +346,8 @@ onAuthStateChanged(auth, async (user) => {
   } else {
     currentUser = null;
     stopChangelogNotificationListener();
-    // Se não há usuário logado, renderiza a landing page
-    renderLanding();
+    // Se não há usuário logado, decide qual página pública renderizar
+    handlePublicRouting();
   }
   isInitialized = true;
 });

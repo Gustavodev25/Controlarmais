@@ -312,6 +312,27 @@ async function verifyFirebaseRequest(req) {
     }
 }
 
+async function requireAdminRequest(req, res) {
+    const authResult = await verifyFirebaseRequest(req);
+    if (!authResult.ok) {
+        res.status(authResult.status).json({ error: authResult.error });
+        return null;
+    }
+
+    if (!db) {
+        res.status(500).json({ error: 'Firestore nao disponivel.' });
+        return null;
+    }
+
+    const callerDoc = await db.collection('users').doc(authResult.uid).get();
+    if (!callerDoc.exists || callerDoc.data()?.isAdmin !== true) {
+        res.status(403).json({ error: 'Acesso negado. Apenas administradores.' });
+        return null;
+    }
+
+    return authResult;
+}
+
 async function ensureAsaasCustomerForUser({ uid, userData }) {
     const storedCustomerId = userData?.subscription?.asaasCustomerId || null;
     if (storedCustomerId) {
@@ -1580,6 +1601,7 @@ app.get('/api/admin/users', async (req, res) => {
 
             const email = data.email || profile.email || authUser?.email || 'N/A';
             const name = data.name || profile.name || authUser?.displayName || email || uid;
+            const disabled = Boolean(authUser?.disabled || data.disabled || data.isBlocked || data.blockedAt);
 
             const provider = sub.provider || (sub.asaasCustomerId ? 'asaas' : sub.stripeCustomerId ? 'stripe' : 'unknown');
             const plan = sub.plan || data.plan || 'free';
@@ -1639,6 +1661,10 @@ app.get('/api/admin/users', async (req, res) => {
                 cancellationFeedback: sub.cancellationFeedback || null,
                 cancellationComment: sub.cancellationComment || null,
                 isAdmin: data.isAdmin || false,
+                disabled,
+                isBlocked: disabled,
+                blockedAt: normalizeStoredDate(data.blockedAt || null),
+                blockedBy: data.blockedBy || null,
                 abandonedHandled: data.abandonedHandled || false,
                 remarketingStage: data.remarketingStage || 0,
                 remarketingOpenD1: data.remarketingOpenD1 || null,
@@ -1664,6 +1690,10 @@ app.get('/api/admin/users', async (req, res) => {
                     plan: 'free',
                     status: 'unknown',
                     isAdmin: false,
+                    disabled: Boolean(authUser.disabled),
+                    isBlocked: Boolean(authUser.disabled),
+                    blockedAt: null,
+                    blockedBy: null,
                     createdAt: authUser.metadata?.creationTime || null,
                     lastLogin: authUser.metadata?.lastSignInTime || null,
                     activeDaysCount: 0
@@ -2083,6 +2113,452 @@ app.get('/api/admin/stats', async (req, res) => {
     } catch (error) {
         console.error('❌ Erro em /api/admin/stats:', error.response?.data || error.message);
         return res.status(500).json({ error: error.message || 'Erro ao calcular estatísticas.' });
+    }
+});
+
+const DEFAULT_ADMIN_CONFIG = Object.freeze({
+    pluggy: {
+        allowNewConnections: true,
+        syncStatusWindowHours: 48,
+        showSandboxConnectors: false,
+    },
+    automaticRules: {
+        detectSubscriptionsFromPluggy: true,
+        categorizeTransactions: true,
+        preserveCustomCategories: true,
+    },
+    globalSettings: {
+        maintenanceMode: false,
+        supportEmail: '',
+        adminNotice: '',
+    },
+});
+
+function mergeAdminConfig(raw = {}) {
+    return {
+        pluggy: {
+            ...DEFAULT_ADMIN_CONFIG.pluggy,
+            ...(raw.pluggy || {}),
+        },
+        automaticRules: {
+            ...DEFAULT_ADMIN_CONFIG.automaticRules,
+            ...(raw.automaticRules || {}),
+        },
+        globalSettings: {
+            ...DEFAULT_ADMIN_CONFIG.globalSettings,
+            ...(raw.globalSettings || {}),
+        },
+        updatedAt: normalizeStoredDate(raw.updatedAt || null),
+        updatedBy: raw.updatedBy || null,
+    };
+}
+
+function buildAdminConfigPatch(input = {}) {
+    const patch = {};
+    const pluggy = input.pluggy && typeof input.pluggy === 'object' ? input.pluggy : {};
+    const automaticRules = input.automaticRules && typeof input.automaticRules === 'object' ? input.automaticRules : {};
+    const globalSettings = input.globalSettings && typeof input.globalSettings === 'object' ? input.globalSettings : {};
+
+    if (Object.prototype.hasOwnProperty.call(pluggy, 'allowNewConnections')) {
+        patch['pluggy.allowNewConnections'] = Boolean(pluggy.allowNewConnections);
+    }
+    if (Object.prototype.hasOwnProperty.call(pluggy, 'syncStatusWindowHours')) {
+        const hours = Number(pluggy.syncStatusWindowHours);
+        patch['pluggy.syncStatusWindowHours'] = Number.isFinite(hours)
+            ? Math.max(1, Math.min(720, Math.round(hours)))
+            : DEFAULT_ADMIN_CONFIG.pluggy.syncStatusWindowHours;
+    }
+    if (Object.prototype.hasOwnProperty.call(pluggy, 'showSandboxConnectors')) {
+        patch['pluggy.showSandboxConnectors'] = Boolean(pluggy.showSandboxConnectors);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(automaticRules, 'detectSubscriptionsFromPluggy')) {
+        patch['automaticRules.detectSubscriptionsFromPluggy'] = Boolean(automaticRules.detectSubscriptionsFromPluggy);
+    }
+    if (Object.prototype.hasOwnProperty.call(automaticRules, 'categorizeTransactions')) {
+        patch['automaticRules.categorizeTransactions'] = Boolean(automaticRules.categorizeTransactions);
+    }
+    if (Object.prototype.hasOwnProperty.call(automaticRules, 'preserveCustomCategories')) {
+        patch['automaticRules.preserveCustomCategories'] = Boolean(automaticRules.preserveCustomCategories);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(globalSettings, 'maintenanceMode')) {
+        patch['globalSettings.maintenanceMode'] = Boolean(globalSettings.maintenanceMode);
+    }
+    if (Object.prototype.hasOwnProperty.call(globalSettings, 'supportEmail')) {
+        patch['globalSettings.supportEmail'] = String(globalSettings.supportEmail || '').trim().slice(0, 160);
+    }
+    if (Object.prototype.hasOwnProperty.call(globalSettings, 'adminNotice')) {
+        patch['globalSettings.adminNotice'] = String(globalSettings.adminNotice || '').trim().slice(0, 500);
+    }
+
+    return patch;
+}
+
+function getAccountUserId(accountDoc, data) {
+    return data.userId || accountDoc.ref.parent?.parent?.id || null;
+}
+
+function getAccountLastSync(data = {}) {
+    return normalizeStoredDate(
+        data.lastSync ||
+        data.lastSyncedAt ||
+        data.syncedAt ||
+        data.updatedAt ||
+        data.lastSyncStartedAt ||
+        data.transactionsSyncCursorAt ||
+        null
+    );
+}
+
+function getInstitutionName(data = {}) {
+    return (
+        data.institution?.name ||
+        data.connector?.name ||
+        data.bankData?.name ||
+        data.bankData?.bankName ||
+        data.bankName ||
+        data.institutionName ||
+        'Banco nao identificado'
+    );
+}
+
+function getAccountErrorMessage(data = {}) {
+    return (
+        data.errorMessage ||
+        data.lastErrorMessage ||
+        data.lastError?.message ||
+        data.error?.message ||
+        data.lastSyncError ||
+        null
+    );
+}
+
+function classifyPluggyConnection({ rawStatus, errorMessage, lastSync }, staleAfterMs) {
+    const status = String(rawStatus || '').toUpperCase();
+    if (errorMessage || status.includes('ERROR') || status.includes('FAILED') || status.includes('LOGIN') || status.includes('INVALID')) {
+        return 'error';
+    }
+    if (status.includes('UPDAT') || status.includes('PROCESS') || status.includes('PENDING')) {
+        return 'updating';
+    }
+    if (!lastSync) {
+        return 'no_sync';
+    }
+    const lastSyncMs = new Date(lastSync).getTime();
+    if (Number.isFinite(lastSyncMs) && Date.now() - lastSyncMs > staleAfterMs) {
+        return 'stale';
+    }
+    return 'ok';
+}
+
+async function getAdminConfigDoc() {
+    const snap = await db.collection('admin').doc('globalConfig').get();
+    return mergeAdminConfig(snap.exists ? snap.data() : {});
+}
+
+app.get('/api/admin/config', async (req, res) => {
+    const authResult = await requireAdminRequest(req, res);
+    if (!authResult) return;
+
+    try {
+        const config = await getAdminConfigDoc();
+        return res.status(200).json({ config });
+    } catch (error) {
+        console.error('[admin/config] erro:', error.message);
+        return res.status(500).json({ error: 'Erro ao carregar configuracoes.' });
+    }
+});
+
+app.patch('/api/admin/config', async (req, res) => {
+    const authResult = await requireAdminRequest(req, res);
+    if (!authResult) return;
+
+    try {
+        const patch = buildAdminConfigPatch(req.body || {});
+        patch.updatedAt = new Date().toISOString();
+        patch.updatedBy = authResult.uid;
+
+        await db.collection('admin').doc('globalConfig').set(patch, { merge: true });
+        const config = await getAdminConfigDoc();
+        return res.status(200).json({ success: true, config });
+    } catch (error) {
+        console.error('[admin/config] erro ao salvar:', error.message);
+        return res.status(500).json({ error: 'Erro ao salvar configuracoes.' });
+    }
+});
+
+app.get('/api/admin/pluggy-sync', async (req, res) => {
+    const authResult = await requireAdminRequest(req, res);
+    if (!authResult) return;
+
+    try {
+        const config = await getAdminConfigDoc();
+        const staleAfterHours = Number(config.pluggy?.syncStatusWindowHours) || DEFAULT_ADMIN_CONFIG.pluggy.syncStatusWindowHours;
+        const staleAfterMs = staleAfterHours * 60 * 60 * 1000;
+
+        const [canonicalSnap, legacySnap] = await Promise.all([
+            db.collectionGroup('accounts').get(),
+            db.collection('accounts').get().catch(() => ({ docs: [] })),
+        ]);
+
+        const accountMap = new Map();
+        const upsertAccount = (docSnap, source) => {
+            const data = docSnap.data() || {};
+            const uid = getAccountUserId(docSnap, data);
+            if (!uid) return;
+
+            const accountId = data.id || docSnap.id;
+            const itemId = data.itemId || data.pluggyItemId || data.item?.id || accountId;
+            const key = `${uid}:${accountId}`;
+            const lastSync = getAccountLastSync(data);
+            const rawStatus = data.itemStatus || data.executionStatus || data.status || data.connectionStatus || null;
+            const errorMessage = getAccountErrorMessage(data);
+
+            const current = accountMap.get(key);
+            if (current && current.source === 'canonical') return;
+
+            accountMap.set(key, {
+                uid,
+                accountId,
+                itemId,
+                source,
+                accountName: data.name || 'Conta sem nome',
+                accountType: data.type || data.subtype || null,
+                institutionName: getInstitutionName(data),
+                lastSync,
+                rawStatus,
+                errorMessage,
+            });
+        };
+
+        canonicalSnap.docs.forEach((docSnap) => upsertAccount(docSnap, 'canonical'));
+        legacySnap.docs.forEach((docSnap) => upsertAccount(docSnap, 'legacy'));
+
+        const usersByUid = new Map();
+        const accountUids = Array.from(new Set(Array.from(accountMap.values()).map((acc) => acc.uid)));
+        await Promise.all(accountUids.map(async (uid) => {
+            const userSnap = await db.collection('users').doc(uid).get();
+            const data = userSnap.exists ? userSnap.data() || {} : {};
+            usersByUid.set(uid, {
+                uid,
+                name: data.name || data.profile?.name || data.email || uid,
+                email: data.email || data.profile?.email || null,
+            });
+        }));
+
+        const connectionsByKey = new Map();
+        for (const account of accountMap.values()) {
+            const connectionKey = `${account.uid}:${account.itemId}`;
+            const existing = connectionsByKey.get(connectionKey);
+            const userInfo = usersByUid.get(account.uid) || { uid: account.uid, name: account.uid, email: null };
+            if (!existing) {
+                connectionsByKey.set(connectionKey, {
+                    uid: account.uid,
+                    name: userInfo.name,
+                    email: userInfo.email,
+                    itemId: account.itemId,
+                    bankNames: new Set([account.institutionName]),
+                    accountCount: 1,
+                    lastSync: account.lastSync,
+                    rawStatus: account.rawStatus,
+                    errors: account.errorMessage ? [account.errorMessage] : [],
+                    sources: new Set([account.source]),
+                });
+                continue;
+            }
+
+            existing.accountCount += 1;
+            existing.bankNames.add(account.institutionName);
+            existing.sources.add(account.source);
+            if (account.errorMessage) existing.errors.push(account.errorMessage);
+            if (account.lastSync && (!existing.lastSync || account.lastSync > existing.lastSync)) {
+                existing.lastSync = account.lastSync;
+            }
+            if (!existing.rawStatus && account.rawStatus) {
+                existing.rawStatus = account.rawStatus;
+            }
+        }
+
+        const rows = Array.from(connectionsByKey.values()).map((row) => {
+            const errorMessage = row.errors[0] || null;
+            const status = classifyPluggyConnection({
+                rawStatus: row.rawStatus,
+                errorMessage,
+                lastSync: row.lastSync,
+            }, staleAfterMs);
+
+            return {
+                uid: row.uid,
+                name: row.name,
+                email: row.email,
+                itemId: row.itemId,
+                banks: Array.from(row.bankNames).filter(Boolean),
+                accountCount: row.accountCount,
+                lastSync: row.lastSync,
+                status,
+                rawStatus: row.rawStatus || null,
+                errorMessage,
+                source: Array.from(row.sources).join('+'),
+            };
+        });
+
+        const statusRank = { error: 0, stale: 1, no_sync: 2, updating: 3, ok: 4 };
+        rows.sort((a, b) => {
+            const rankDiff = (statusRank[a.status] ?? 9) - (statusRank[b.status] ?? 9);
+            if (rankDiff !== 0) return rankDiff;
+            const dateA = a.lastSync ? new Date(a.lastSync).getTime() : 0;
+            const dateB = b.lastSync ? new Date(b.lastSync).getTime() : 0;
+            return dateA - dateB;
+        });
+
+        const summary = rows.reduce((acc, row) => {
+            acc.connectedAccounts += row.accountCount;
+            acc.connectedConnections += 1;
+            acc.connectedUsers.add(row.uid);
+            if (row.status === 'error') acc.errorConnections += 1;
+            if (row.status === 'stale') acc.staleConnections += 1;
+            if (row.lastSync && (!acc.latestSync || row.lastSync > acc.latestSync)) acc.latestSync = row.lastSync;
+            row.banks.forEach((bank) => acc.banks.add(bank));
+            return acc;
+        }, {
+            connectedAccounts: 0,
+            connectedConnections: 0,
+            connectedUsers: new Set(),
+            errorConnections: 0,
+            staleConnections: 0,
+            latestSync: null,
+            banks: new Set(),
+        });
+
+        return res.status(200).json({
+            summary: {
+                connectedAccounts: summary.connectedAccounts,
+                connectedConnections: summary.connectedConnections,
+                connectedUsers: summary.connectedUsers.size,
+                errorConnections: summary.errorConnections,
+                staleConnections: summary.staleConnections,
+                latestSync: summary.latestSync,
+                bankCount: summary.banks.size,
+                staleAfterHours,
+            },
+            rows,
+            generatedAt: new Date().toISOString(),
+        });
+    } catch (error) {
+        console.error('[admin/pluggy-sync] erro:', error.message);
+        return res.status(500).json({ error: 'Erro ao carregar monitoramento Pluggy.' });
+    }
+});
+
+app.patch('/api/admin/users/:uid/access', async (req, res) => {
+    const authResult = await requireAdminRequest(req, res);
+    if (!authResult) return;
+
+    const targetUid = req.params.uid;
+    const disabled = Boolean(req.body?.disabled ?? req.body?.isBlocked);
+    if (!targetUid) return res.status(400).json({ error: 'UID obrigatorio.' });
+    if (targetUid === authResult.uid && disabled) {
+        return res.status(400).json({ error: 'Voce nao pode bloquear a si mesmo.' });
+    }
+
+    try {
+        try {
+            await admin.auth().updateUser(targetUid, { disabled });
+        } catch (authError) {
+            console.warn(`[admin/users/access] Auth nao atualizado para ${targetUid}: ${authError.message}`);
+        }
+
+        const ref = db.collection('users').doc(targetUid);
+        const patch = disabled
+            ? {
+                disabled: true,
+                isBlocked: true,
+                blockedAt: new Date().toISOString(),
+                blockedBy: authResult.uid,
+                updatedAt: new Date().toISOString(),
+            }
+            : {
+                disabled: false,
+                isBlocked: false,
+                blockedAt: admin.firestore.FieldValue.delete(),
+                blockedBy: admin.firestore.FieldValue.delete(),
+                updatedAt: new Date().toISOString(),
+            };
+
+        await ref.set(patch, { merge: true });
+        return res.status(200).json({ success: true, disabled });
+    } catch (error) {
+        console.error('[admin/users/access] erro:', error.message);
+        return res.status(500).json({ error: 'Erro ao atualizar acesso do usuario.' });
+    }
+});
+
+app.patch('/api/admin/users/:uid/plan', async (req, res) => {
+    const authResult = await requireAdminRequest(req, res);
+    if (!authResult) return;
+
+    const targetUid = req.params.uid;
+    const plan = String(req.body?.plan || '').toLowerCase();
+    const status = String(req.body?.status || (plan === 'pro' ? 'active' : 'inactive')).toLowerCase();
+    const allowedPlans = new Set(['free', 'pro']);
+    const allowedStatuses = new Set(['active', 'inactive', 'overdue', 'trialing', 'canceled']);
+
+    if (!allowedPlans.has(plan)) {
+        return res.status(400).json({ error: 'Plano invalido.' });
+    }
+    if (!allowedStatuses.has(status)) {
+        return res.status(400).json({ error: 'Status invalido.' });
+    }
+
+    try {
+        await db.collection('users').doc(targetUid).set({
+            plan,
+            subscription: {
+                plan,
+                status,
+                adminManaged: true,
+                adminManagedAt: new Date().toISOString(),
+                adminManagedBy: authResult.uid,
+            },
+            updatedAt: new Date().toISOString(),
+        }, { merge: true });
+
+        return res.status(200).json({ success: true, plan, status });
+    } catch (error) {
+        console.error('[admin/users/plan] erro:', error.message);
+        return res.status(500).json({ error: 'Erro ao atualizar plano do usuario.' });
+    }
+});
+
+app.post('/api/admin/users/:uid/reset-access', async (req, res) => {
+    const authResult = await requireAdminRequest(req, res);
+    if (!authResult) return;
+
+    const targetUid = req.params.uid;
+
+    try {
+        const [targetDoc, authUser] = await Promise.all([
+            db.collection('users').doc(targetUid).get(),
+            admin.auth().getUser(targetUid).catch(() => null),
+        ]);
+        const data = targetDoc.exists ? targetDoc.data() || {} : {};
+        const email = data.email || data.profile?.email || authUser?.email || null;
+        if (!email) {
+            return res.status(400).json({ error: 'Usuario sem e-mail para reset de acesso.' });
+        }
+
+        const passwordResetLink = await admin.auth().generatePasswordResetLink(email);
+        await db.collection('users').doc(targetUid).set({
+            accessResetRequestedAt: new Date().toISOString(),
+            accessResetRequestedBy: authResult.uid,
+            updatedAt: new Date().toISOString(),
+        }, { merge: true });
+
+        return res.status(200).json({ success: true, email, passwordResetLink });
+    } catch (error) {
+        console.error('[admin/users/reset-access] erro:', error.message);
+        return res.status(500).json({ error: 'Erro ao gerar reset de acesso.' });
     }
 });
 
