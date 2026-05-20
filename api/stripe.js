@@ -1716,7 +1716,10 @@ export async function createUniquePromoCode(name, couponId = 'REMARKETING_9_90',
     const expiresAt = Math.floor(Date.now() / 1000) + (expiresInHours * 3600);
 
     const promo = await stripeClient.promotionCodes.create({
-        coupon: couponId,
+        promotion: {
+            type: 'coupon',
+            coupon: couponId,
+        },
         code: code,
         max_redemptions: 1,
         expires_at: expiresAt

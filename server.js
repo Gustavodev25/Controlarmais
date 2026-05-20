@@ -8,7 +8,7 @@ import pluggyRouter from './api/pluggy.js';
 import stripeRouter, { handleStripeWebhook, isStripeReady, createRemarketingCheckoutSession, createUniquePromoCode } from './api/stripe.js';
 import aiRouter from './api/ai.js';
 import { sendUtmifySale } from './api/utmify.js';
-import { sendEmail, sendOtpEmail, sendWelcomeEmail, sendAbandonedCartEmail } from './api/emails.js';
+import { sendEmail, sendOtpEmail, sendWelcomeEmail, sendPasswordResetEmail, sendAbandonedCartEmail } from './api/emails.js';
 import Stripe from 'stripe';
 
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY, {
