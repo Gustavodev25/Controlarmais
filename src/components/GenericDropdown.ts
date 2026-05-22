@@ -2,6 +2,7 @@ import gsap from 'gsap';
 import { hideAllTooltips } from './Tooltip';
 
 const activeDropdowns: Set<{ close: () => void }> = new Set();
+const FLOATING_DROPDOWN_Z_INDEX = '2147483647';
 
 export function closeAllGenericDropdowns() {
   activeDropdowns.forEach(d => d.close());
@@ -85,15 +86,23 @@ export function attachGenericDropdownListeners(triggerId: string, menuId: string
     const viewportPadding = 12;
     const viewportGap = 6;
     const items = menu.querySelectorAll('.dropdown-item');
-    const card = trigger.closest('.overview-card, .cc-card-item, .accounts-balance-card') as HTMLElement | null;
+    const stackingHost = (
+        trigger.closest('.rem-card-wrapper') ||
+        trigger.closest('.rem-card, .subs-card, .overview-card, .cc-card-item, .accounts-balance-card, .cc-row, tr')
+    ) as HTMLElement | null;
 
-let isOpen = false;
-  let animation: gsap.core.Timeline | null = null;
-  let timeoutId: ReturnType<typeof setTimeout> | null = null;
-  let currentOrigin = 'top right';
+    let oldHostZIndex = '';
+    let oldHostPosition = '';
+    let oldHostOverflow = '';
+    let hostWasElevated = false;
 
-  const dropdownInstance = { close: () => close() };
-  activeDropdowns.add(dropdownInstance);
+    let isOpen = false;
+    let animation: gsap.core.Timeline | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let currentOrigin = 'top right';
+
+    const dropdownInstance = { close: () => close() };
+    activeDropdowns.add(dropdownInstance);
 
     const syncMenuPosition = () => {
         if (!trigger.isConnected || !menu.isConnected) return;
@@ -115,16 +124,47 @@ let isOpen = false;
         if (isOpen) syncMenuPosition();
     };
 
-    menu.classList.remove('absolute', 'right-0', 'top-full', 'mt-1');
-    menu.classList.add('fixed');
-    menu.style.position = 'fixed';
-    menu.style.right = 'auto';
-    menu.style.bottom = 'auto';
-    menu.style.marginTop = '0px';
-    menu.style.zIndex = '99999';
-    menu.style.setProperty('z-index', '99999', 'important');
-    menu.style.isolation = 'isolate';
-    document.body.appendChild(menu);
+    const ensureFloatingLayer = () => {
+        menu.classList.remove('absolute', 'right-0', 'top-full', 'mt-1');
+        menu.classList.add('fixed');
+        menu.style.position = 'fixed';
+        menu.style.right = 'auto';
+        menu.style.bottom = 'auto';
+        menu.style.marginTop = '0px';
+        menu.style.zIndex = FLOATING_DROPDOWN_Z_INDEX;
+        menu.style.setProperty('z-index', FLOATING_DROPDOWN_Z_INDEX, 'important');
+        menu.style.isolation = 'isolate';
+
+        // Reappend on open so the menu stays above transformed/list-card stacking contexts.
+        if (menu.parentElement !== document.body || menu.nextElementSibling) {
+            document.body.appendChild(menu);
+        }
+    };
+
+    const elevateStackingHost = () => {
+        if (!stackingHost || hostWasElevated) return;
+
+        const computed = window.getComputedStyle(stackingHost);
+        oldHostZIndex = stackingHost.style.zIndex;
+        oldHostPosition = stackingHost.style.position;
+        oldHostOverflow = stackingHost.style.overflow;
+
+        if (computed.position === 'static') stackingHost.style.position = 'relative';
+        stackingHost.style.zIndex = String(Number(FLOATING_DROPDOWN_Z_INDEX) - 1);
+        stackingHost.style.overflow = 'visible';
+        hostWasElevated = true;
+    };
+
+    const restoreStackingHost = () => {
+        if (!stackingHost || !hostWasElevated) return;
+
+        stackingHost.style.zIndex = oldHostZIndex;
+        stackingHost.style.position = oldHostPosition;
+        stackingHost.style.overflow = oldHostOverflow;
+        hostWasElevated = false;
+    };
+
+    ensureFloatingLayer();
 
     window.addEventListener('resize', handleViewportChange);
     window.addEventListener('scroll', handleViewportChange, true);
@@ -137,15 +177,13 @@ let isOpen = false;
         isOpen = true;
         if (animation) animation.kill();
 
+        ensureFloatingLayer();
         syncMenuPosition();
 
         // Garante que o menu esteja visível para a animação começar.
         gsap.set(menu, { display: 'flex' });
 
-        if (card) {
-            card.dataset.oldZ = card.style.zIndex;
-            card.style.zIndex = '120';
-        }
+        elevateStackingHost();
 
         animation = gsap.timeline();
 
@@ -208,9 +246,7 @@ let isOpen = false;
         animation = gsap.timeline({
             onComplete: () => {
                 gsap.set(menu, { display: 'none' });
-                if (card) {
-                    card.style.zIndex = card.dataset.oldZ || '';
-                }
+                restoreStackingHost();
             }
         });
 
@@ -267,13 +303,13 @@ let isOpen = false;
 
     observer.observe(document.body, { childList: true, subtree: true });
 
-  const cleanup = () => {
-    activeDropdowns.delete(dropdownInstance);
-    window.removeEventListener('resize', handleViewportChange);
-    window.removeEventListener('scroll', handleViewportChange, true);
-    document.removeEventListener('click', outsideClick);
-    observer.disconnect();
-  };
+    const cleanup = () => {
+        activeDropdowns.delete(dropdownInstance);
+        window.removeEventListener('resize', handleViewportChange);
+        window.removeEventListener('scroll', handleViewportChange, true);
+        document.removeEventListener('click', outsideClick);
+        observer.disconnect();
+    };
 
-  return cleanup;
+    return cleanup;
 }
