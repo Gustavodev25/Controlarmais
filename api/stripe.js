@@ -37,6 +37,9 @@ const SYNC_CREDIT_COMBOS = Object.freeze([
     },
 ]);
 
+const LANDING_LAUNCH_PROMO_CODE = 'LANCAMENTO50';
+const LANDING_LAUNCH_COUPON_ID = 'zQlO4Xkc';
+
 const STRIPE_ACTIVE_SUBSCRIPTION_STATUSES = new Set([
     'active',
     'trialing',
@@ -1018,9 +1021,9 @@ router.post('/checkout/subscription-session', async (req, res) => {
         // Apply promotion code if provided (e.g. LANCAMENTO50)
         const promoCodeInput = (req.body?.promotionCode || '').trim().toUpperCase();
         if (promoCodeInput) {
-            if (promoCodeInput === 'LANCAMENTO50') {
-                // Use hardcoded ID provided for launch discount for stability
-                sessionParams.discounts = [{ promotion_code: 'promo_1TEtkM3Gkobo4H4N68odCMxs' }];
+            if (promoCodeInput === LANDING_LAUNCH_PROMO_CODE) {
+                // Coupon is 50% off with duration "once", so only the first invoice is discounted.
+                sessionParams.discounts = [{ coupon: LANDING_LAUNCH_COUPON_ID }];
             } else {
                 try {
                     const promoCodes = await stripeClient.promotionCodes.list({

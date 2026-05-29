@@ -377,21 +377,21 @@ export function PricingLanding(): string {
         <div id="landing-pricing-card-top">
           <div class="pricing-plan-row">
             <p class="pricing-plan-name">Pro</p>
-            <span class="pricing-plan-badge">50% OFF</span>
+            <span class="pricing-plan-badge">1&ordm; m&ecirc;s com 50% OFF</span>
           </div>
 
           <div id="landing-pricing-price">
-            <span class="pricing-old-price">De R$ 35,90</span>
+            <span class="pricing-old-price">R$ 35,90/m&ecirc;s</span>
 
             <div class="pricing-price-main">
               <span class="pricing-curr">R$</span>
               <span class="pricing-amount">17</span>
               <span class="pricing-dec">,95</span>
-              <span class="pricing-period">/mês</span>
+              <span class="pricing-period">no 1&ordm; m&ecirc;s</span>
             </div>
 
             <p class="pricing-save-text">
-              Acesso completo ao Controlar+ por metade do preço.
+              Depois, R$ 35,90/m&ecirc;s. Cancele quando quiser.
             </p>
           </div>
         </div>
