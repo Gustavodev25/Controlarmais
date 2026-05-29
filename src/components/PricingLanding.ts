@@ -14,7 +14,7 @@ export function PricingLanding(): string {
     'Calendário de gastos',
     'Conexões Open Finance',
     'Lembretes de pagamentos',
-    'App Mobile (iOS e Android) em breve',
+    'App Mobile (iOS e Android)',
     'Controle de transações',
     'Sincronização em tempo real',
   ];

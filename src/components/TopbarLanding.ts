@@ -301,10 +301,12 @@ export function TopbarLanding(): string {
                 transform-origin: center center;
                 will-change: transform, border-radius, box-shadow, background, border-color;
               ">
-                <svg width="14" height="17" viewBox="0 0 384 512" fill="currentColor">
-                  <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
                 </svg>
-                Baixar iOS
+                Baixar App
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.4">
                   <polyline points="6 9 12 15 18 9"></polyline>
                 </svg>
@@ -315,8 +317,17 @@ export function TopbarLanding(): string {
                     <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/>
                   </svg>
                   <div style="display:flex;flex-direction:column;gap:2px">
-                    <span>Disponível na App Store</span>
-                    <span class="ios-dd-sub">Lançamento oficial para iPhone</span>
+                    <span>Versão para iOS</span>
+                    <span class="ios-dd-sub">Disponível na App Store</span>
+                  </div>
+                </a>
+                <a class="ios-dd-item" href="https://play.google.com/store/apps/details?id=com.gustavodev25.controlarapp&hl=pt_BR" target="_blank" rel="noopener noreferrer">
+                  <svg width="16" height="20" viewBox="0 0 512 512" fill="currentColor">
+                    <path d="M325.3 234.3L104.6 13l280.8 161.2-60.1 60.1zM47 0C34 6.8 25.3 19.2 25.3 35.3v441.3c0 16.1 8.7 28.5 21.7 35.3l256.6-256L47 0zm425.2 225.6l-58 33.3-60.7-60.7 60.1-60.1 58.6 33.6c24.8 14.2 24.8 37.4 0 53.2zm-121.6 52.1L104.6 499l220.7-126.7 60.7-60.7z"/>
+                  </svg>
+                  <div style="display:flex;flex-direction:column;gap:2px">
+                    <span>Versão para Android</span>
+                    <span class="ios-dd-sub">Disponível na Google Play</span>
                   </div>
                 </a>
               </div>
@@ -381,7 +392,31 @@ export function TopbarLanding(): string {
               <svg width="15" height="18" viewBox="0 0 384 512" fill="currentColor">
                 <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/>
               </svg>
-              Baixar iOS
+              Baixar para iOS
+            </a>
+            <a id="landing-mobile-android" href="https://play.google.com/store/apps/details?id=com.gustavodev25.controlarapp&hl=pt_BR" target="_blank" rel="noopener noreferrer" style="
+              width: 100%;
+              height: 48px;
+              border-radius: 12px;
+              border: 1px solid rgba(255,255,255,0.12);
+              background: #161616;
+              color: #ffffff;
+              font-size: 14px;
+              font-weight: 600;
+              cursor: pointer;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              gap: 8px;
+              text-decoration: none;
+              box-shadow: 0 4px 15px rgba(0,0,0,0.25);
+              transform-origin: center center;
+              will-change: transform, border-radius, box-shadow, background, border-color;
+            ">
+              <svg width="15" height="18" viewBox="0 0 512 512" fill="currentColor">
+                <path d="M325.3 234.3L104.6 13l280.8 161.2-60.1 60.1zM47 0C34 6.8 25.3 19.2 25.3 35.3v441.3c0 16.1 8.7 28.5 21.7 35.3l256.6-256L47 0zm425.2 225.6l-58 33.3-60.7-60.7 60.1-60.1 58.6 33.6c24.8 14.2 24.8 37.4 0 53.2zm-121.6 52.1L104.6 499l220.7-126.7 60.7-60.7z"/>
+              </svg>
+              Baixar para Android
             </a>
             <button id="landing-mobile-login" style="
               width: 100%;
@@ -587,7 +622,7 @@ export function attachTopbarLandingListeners() {
   if (loginBtn) setupTopbarButtonMorph(loginBtn);
   if (mobileLoginBtn) setupTopbarButtonMorph(mobileLoginBtn);
 
-  // === iOS Dropdown (Desktop) ===
+  // === iOS & Android Dropdown (Desktop) ===
   const iosBtn = document.getElementById('landing-ios-btn');
   const iosDropdown = document.getElementById('landing-ios-dropdown');
   if (iosBtn && iosDropdown) {
@@ -605,7 +640,7 @@ export function attachTopbarLandingListeners() {
     };
 
     let iosAnim: gsap.core.Timeline | null = null;
-    const iosItem = iosDropdown.querySelector('.ios-dd-item') as HTMLElement | null;
+    const iosItems = iosDropdown.querySelectorAll('.ios-dd-item');
 
     const openIos = () => {
       if (iosOpen) return;
@@ -624,11 +659,11 @@ export function attachTopbarLandingListeners() {
         0
       );
 
-      // 2. Content: deblur
-      if (iosItem) {
-        iosAnim.fromTo(iosItem,
+      // 2. Content: deblur with stagger
+      if (iosItems.length > 0) {
+        iosAnim.fromTo(iosItems,
           { opacity: 0, filter: 'blur(6px)', scale: 0.95 },
-          { opacity: 1, filter: 'blur(0px)', scale: 1, duration: 0.35, ease: 'power2.out' },
+          { opacity: 1, filter: 'blur(0px)', scale: 1, duration: 0.35, ease: 'power2.out', stagger: 0.05 },
           0.05
         );
       }
@@ -644,8 +679,8 @@ export function attachTopbarLandingListeners() {
         onComplete: () => { gsap.set(iosDropdown, { display: 'none' }); },
       });
 
-      if (iosItem) {
-        iosAnim.to(iosItem, { opacity: 0, filter: 'blur(4px)', duration: 0.15, ease: 'power2.in' }, 0);
+      if (iosItems.length > 0) {
+        iosAnim.to(iosItems, { opacity: 0, filter: 'blur(4px)', duration: 0.15, ease: 'power2.in', stagger: { each: 0.05, from: 'end' } }, 0);
       }
 
       iosAnim.to(iosDropdown,
@@ -662,9 +697,12 @@ export function attachTopbarLandingListeners() {
     window.addEventListener('resize', () => { if (iosOpen) syncPos(); });
   }
 
-  // === iOS (Mobile) — direct link, no dropdown ===
+  // === iOS & Android (Mobile) — direct link, no dropdown ===
   const mobileIosBtn = document.getElementById('landing-mobile-ios');
   if (mobileIosBtn) setupTopbarButtonMorph(mobileIosBtn as HTMLElement);
+
+  const mobileAndroidBtn = document.getElementById('landing-mobile-android');
+  if (mobileAndroidBtn) setupTopbarButtonMorph(mobileAndroidBtn as HTMLElement);
 
   document.querySelectorAll<HTMLAnchorElement>('.desktop-nav-link').forEach(link => {
     setupNavLinkMorph(link, false);

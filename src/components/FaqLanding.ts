@@ -12,7 +12,7 @@ export function FaqLanding(): string {
     },
     {
       q: "Existe versão do aplicativo para celular?",
-      a: "Sim! O Controlar+ já está disponível na App Store para iPhone. A versão para Android está em desenvolvimento."
+      a: "Sim! O Controlar+ já está disponível na App Store para iPhone e na Google Play Store para dispositivos Android."
     },
     {
       q: "Posso cancelar minha assinatura quando quiser?",
