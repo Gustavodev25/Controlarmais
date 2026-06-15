@@ -15,12 +15,36 @@ import { GenericDropdown, attachGenericDropdownListeners } from '../components/G
 const verifiedIconStripe = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="#6faf6e" class="shrink-0" title="Stripe: Assinatura Verificada e Ativa"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12.01 2.011a3.2 3.2 0 0 1 2.113 .797l.154 .145l.698 .698a1.2 1.2 0 0 0 .71 .341l.135 .008h1a3.2 3.2 0 0 1 3.195 3.018l.005 .182v1c0 .27 .092 .533 .258 .743l.09 .1l.697 .698a3.2 3.2 0 0 1 .147 4.382l-.145 .154l-.698 .698a1.2 1.2 0 0 0 -.341 .71l-.008 .135v1a3.2 3.2 0 0 1 -3.018 3.195l-.182 .005h-1a1.2 1.2 0 0 0 -.743 .258l-.1 .09l-.698 .697a3.2 3.2 0 0 1 -4.382 .147l-.154 -.145l-.698 -.698a1.2 1.2 0 0 0 -.71 -.341l-.135 -.008h-1a3.2 3.2 0 0 1 -3.195 -3.018l-.005 -.182v-1a1.2 1.2 0 0 0 -.258 -.743l-.09 -.1l-.697 -.698a3.2 3.2 0 0 1 -.147 -4.382l.145 -.154l.698 -.698a1.2 1.2 0 0 0 .341 -.71l.008 -.135v-1l.005 -.182a3.2 3.2 0 0 1 3.013 -3.013l.182 -.005h1a1.2 1.2 0 0 0 .743 -.258l.1 -.09l.698 -.697a3.2 3.2 0 0 1 2.269 -.944zm3.697 7.282a1 1 0 0 0 -1.414 0l-3.293 3.292l-1.293 -1.292l-.094 -.083a1 1 0 0 0 -1.32 1.497l2 2l.094 .083a1 1 0 0 0 1.32 -.083l4 -4l.083 -.094a1 1 0 0 0 -.083 -1.32z" /></svg>`;
 const verifiedIconAsaas = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="#2869d2" class="shrink-0" title="Asaas: Assinatura Verificada e Ativa"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12.01 2.011a3.2 3.2 0 0 1 2.113 .797l.154 .145l.698 .698a1.2 1.2 0 0 0 .71 .341l.135 .008h1a3.2 3.2 0 0 1 3.195 3.018l.005 .182v1c0 .27 .092 .533 .258 .743l.09 .1l.697 .698a3.2 3.2 0 0 1 .147 4.382l-.145 .154l-.698 .698a1.2 1.2 0 0 0 -.341 .71l-.008 .135v1a3.2 3.2 0 0 1 -3.018 3.195l-.182 .005h-1a1.2 1.2 0 0 0 -.743 .258l-.1 .09l-.698 .697a3.2 3.2 0 0 1 -4.382 .147l-.154 -.145l-.698 -.698a1.2 1.2 0 0 0 -.71 -.341l-.135 -.008h-1a3.2 3.2 0 0 1 -3.195 -3.018l-.005 -.182v-1a1.2 1.2 0 0 0 -.258 -.743l-.09 -.1l-.697 -.698a3.2 3.2 0 0 1 -.147 -4.382l.145 -.154l.698 -.698a1.2 1.2 0 0 0 .341 -.71l.008 -.135v-1l.005 -.182a3.2 3.2 0 0 1 3.013 -3.013l.182 -.005h1a1.2 1.2 0 0 0 .743 -.258l.1 -.09l.698 -.697a3.2 3.2 0 0 1 2.269 -.944zm3.697 7.282a1 1 0 0 0 -1.414 0l-3.293 3.292l-1.293 -1.292l-.094 -.083a1 1 0 0 0 -1.32 1.497l2 2l.094 .083a1 1 0 0 0 1.32 -.083l4 -4l.083 -.094a1 1 0 0 0 -.083 -1.32z" /></svg>`;
 const loaderIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" title="Verificando assinatura..."><style>@keyframes spinner_qM83{0%{stroke-dasharray:0 150;stroke-dashoffset:0}47.5%{stroke-dasharray:42 150;stroke-dashoffset:-16}95%,100%{stroke-dasharray:42 150;stroke-dashoffset:-59}}@keyframes spinner_8Q3b{100%{transform:rotate(360deg)}}.spi{transform-origin:center;animation:spinner_8Q3b 2s linear infinite}.spi circle{stroke-linecap:round;animation:spinner_qM83 1.5s ease-in-out infinite}</style><g class="spi"><circle cx="12" cy="12" r="9.5" fill="none" /></g></svg>`;
+const warningIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" title="Verificacao indisponivel"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>`;
 const moneyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+
+type ProviderError = {
+  provider: string;
+  status?: number | null;
+  message?: string;
+};
 
 // ====================== HELPERS ======================
 
 function normalizeValue(value: any): string {
   return String(value ?? '').trim().toLowerCase();
+}
+
+function providerName(provider: string): string {
+  const normalized = normalizeValue(provider);
+  if (normalized === 'asaas') return 'Asaas';
+  if (normalized === 'stripe') return 'Stripe';
+  return provider || 'provedor';
+}
+
+function hasProviderError(errors: ProviderError[], provider: string): boolean {
+  const normalized = normalizeValue(provider);
+  return Boolean(normalized && errors.some((error) => normalizeValue(error.provider) === normalized));
+}
+
+function providerErrorsText(errors: ProviderError[]): string {
+  const names = Array.from(new Set(errors.map((error) => providerName(error.provider))));
+  return names.length ? names.join(', ') : 'provedores';
 }
 
 function parseMoneyValue(value: any): number {
@@ -269,9 +293,12 @@ function renderRow(userItem: any): string {
   // "Pro" so para quem esta efetivamente pagando (verificado ao vivo no provedor).
   // Usuarios com plan:'pro' no Firestore mas sem assinatura ativa entram como "Sem plano".
   const isPaying = userItem.isVerified === true;
-  let planLabel = isPaying
-    ? '<span class="cc-badge cc-badge-paid">Pro</span>'
-    : '<span class="cc-badge cc-badge-inactive">Sem plano</span>';
+  const verificationUnavailable = userItem.verificationUnavailable === true;
+  let planLabel = verificationUnavailable
+    ? '<span class="cc-badge cc-badge-pending">Pendente</span>'
+    : isPaying
+      ? '<span class="cc-badge cc-badge-paid">Pro</span>'
+      : '<span class="cc-badge cc-badge-inactive">Sem plano</span>';
 
   let providerHtml = '<span class="cc-badge cc-badge-inactive">Sistema</span>';
   if (userItem.provider === 'asaas') {
@@ -289,6 +316,13 @@ function renderRow(userItem: any): string {
       className: `user-verify-badge-${userItem.uid}`,
       content: targetIcon,
       text: `Assinatura verificada no ${userItem.provider === 'asaas' ? 'Asaas' : 'Stripe'}`
+    });
+  } else if (verificationUnavailable && (userItem.provider === 'stripe' || userItem.provider === 'asaas')) {
+    verifiedBadgeHtml = Tooltip({
+      id: `v-t-${userItem.uid}`,
+      className: `user-verify-badge-${userItem.uid}`,
+      content: warningIcon,
+      text: `Nao foi possivel verificar o ${userItem.provider === 'asaas' ? 'Asaas' : 'Stripe'} agora`
     });
   } else if (userItem.isVerified === undefined && (userItem.provider === 'stripe' || userItem.provider === 'asaas')) {
     verifiedBadgeHtml = Tooltip({
@@ -988,8 +1022,12 @@ async function loadSubscriptions(): Promise<void> {
       const statsRes = await fetch(`${API_BASE}/api/admin/stats`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (!statsRes.ok) throw new Error('Falha ao buscar stats.');
+      if (!statsRes.ok) {
+        const errPayload = await statsRes.json().catch(() => ({ error: 'Falha ao buscar stats.' }));
+        throw new Error(errPayload.error || 'Falha ao buscar stats.');
+      }
       const statsData = await statsRes.json();
+      const providerErrors: ProviderError[] = Array.isArray(statsData.providerErrors) ? statsData.providerErrors : [];
       type PayingUserInfo = {
         uid: string;
         provider: string;
@@ -1010,9 +1048,18 @@ async function loadSubscriptions(): Promise<void> {
       const payingByUid = new Map<string, PayingUserInfo>();
       payingUsers.forEach((p) => payingByUid.set(p.uid, p));
 
+      if (providerErrors.length) {
+        toaster.create({
+          title: 'Verificacao parcial',
+          description: `Nao foi possivel consultar ${providerErrorsText(providerErrors)} agora.`,
+          type: 'warning'
+        });
+      }
+
       allUsersGlobal.forEach((u: any) => {
         const info = payingByUid.get(u.uid);
         if (info) {
+          u.verificationUnavailable = false;
           u.isVerified = true;
           u.isPaying = ['active', 'trialing'].includes(normalizeValue(info.status));
           u.providerStatus = info.status;
@@ -1029,7 +1076,13 @@ async function loadSubscriptions(): Promise<void> {
           if (info.provider && u.provider !== info.provider) {
             u.provider = info.provider;
           }
+        } else if (hasProviderError(providerErrors, u.provider)) {
+          u.verificationUnavailable = true;
+          u.isVerified = undefined;
+          u.isPaying = false;
+          u.providerStatus = 'error';
         } else {
+          u.verificationUnavailable = false;
           u.isVerified = false;
           u.isPaying = false;
         }
@@ -1039,10 +1092,12 @@ async function loadSubscriptions(): Promise<void> {
       applyFilterAndRender();
     } catch (statsErr) {
       console.error('[AdminSubscriptions] erro ao buscar stats:', statsErr);
-      // Marca todos como nao verificados em caso de falha
+      // Marca provedores externos como verificacao pendente em caso de falha geral.
       allUsersGlobal.forEach((u: any) => {
         if (u.isVerified === undefined) {
-          u.isVerified = false;
+          const isExternalProvider = u.provider === 'stripe' || u.provider === 'asaas';
+          u.verificationUnavailable = isExternalProvider;
+          u.isVerified = isExternalProvider ? undefined : false;
           u.isPaying = false;
         }
       });
@@ -1078,6 +1133,13 @@ function showUserModal(userItem: any) {
       className: `user-verify-badge-${userItem.uid}`,
       content: targetIcon,
       text: `Assinatura verificada no ${userItem.provider === 'asaas' ? 'Asaas' : 'Stripe'}`
+    });
+  } else if (userItem.verificationUnavailable === true && (userItem.provider === 'stripe' || userItem.provider === 'asaas')) {
+    modalVerifyHtml = Tooltip({
+      id: modalTooltipId,
+      className: `user-verify-badge-${userItem.uid}`,
+      content: warningIcon,
+      text: `Nao foi possivel verificar o ${userItem.provider === 'asaas' ? 'Asaas' : 'Stripe'} agora`
     });
   } else if (userItem.isVerified === undefined && (userItem.provider === 'stripe' || userItem.provider === 'asaas')) {
     modalVerifyHtml = Tooltip({
@@ -1646,7 +1708,7 @@ export function renderAdminSubscriptions(user: any) {
   if (auth.currentUser) {
     syncStripeAndLoad(auth.currentUser);
   } else {
-    const unsubscribe = auth.onAuthStateChanged((u) => {
+    const unsubscribe = auth.onAuthStateChanged((u: any) => {
       unsubscribe();
       if (u) syncStripeAndLoad(u);
     });

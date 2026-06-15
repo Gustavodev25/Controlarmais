@@ -1505,9 +1505,25 @@ router.post('/asaas-migrate', async (req, res) => {
 
     // ── Buscar assinatura no Asaas ──────────────────────────────────────
     const ASAAS_API_KEY = process.env.ASAAS_API_KEY;
-    const ASAAS_BASE = process.env.ASAAS_MODE === 'production'
-        ? 'https://www.asaas.com/api/v3'
-        : 'https://sandbox.asaas.com/api/v3';
+    const asaasModeRaw = String(process.env.ASAAS_MODE || '').trim().toLowerCase();
+    const railwayEnvironment = String(
+        process.env.RAILWAY_ENVIRONMENT_NAME ||
+        process.env.RAILWAY_ENVIRONMENT ||
+        ''
+    ).trim().toLowerCase();
+    const asaasMode = ['production', 'prod', 'live'].includes(asaasModeRaw)
+        ? 'production'
+        : ['sandbox', 'test', 'testing', 'development', 'dev'].includes(asaasModeRaw)
+            ? 'sandbox'
+            : process.env.NODE_ENV === 'production' || railwayEnvironment.includes('production')
+                ? 'production'
+                : 'sandbox';
+    const configuredAsaasBase = String(process.env.ASAAS_BASE_URL || '').trim().replace(/\/+$/, '');
+    const ASAAS_BASE = configuredAsaasBase
+        ? (/\/v3$/i.test(configuredAsaasBase) ? configuredAsaasBase : `${configuredAsaasBase}/v3`)
+        : asaasMode === 'production'
+            ? 'https://api.asaas.com/v3'
+            : 'https://api-sandbox.asaas.com/v3';
 
     if (!ASAAS_API_KEY) {
         return res.status(500).json({ error: 'Asaas nao configurado.' });

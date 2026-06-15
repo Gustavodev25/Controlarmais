@@ -141,6 +141,19 @@ function isAnnualBillingCycle(value) {
     return ['annual', 'year', 'yearly', 'anual'].includes(cycle);
 }
 
+function buildProviderError(provider, error) {
+    const status = Number(error?.response?.status) || null;
+    let message = error?.message || 'Falha ao consultar provedor externo.';
+
+    if (provider === 'asaas' && status === 401) {
+        message = 'Asaas recusou a chave de API ou o ambiente configurado.';
+    } else if (status) {
+        message = `${provider} respondeu com status ${status}.`;
+    }
+
+    return { provider, status, message };
+}
+
 function getSubscriptionMonthlyAmount(sub = {}, data = {}) {
     const rawAmount = [
         sub.nextAmount,
@@ -706,17 +719,42 @@ app.post('/api/confirm-password-reset', async (req, res) => {
 // ─────────────────────────────────────────────
 // ASAAS — Configuração
 // ─────────────────────────────────────────────
+function resolveAsaasMode() {
+    const rawMode = String(process.env.ASAAS_MODE || '').trim().toLowerCase();
+    if (['production', 'prod', 'live'].includes(rawMode)) return 'production';
+    if (['sandbox', 'test', 'testing', 'development', 'dev'].includes(rawMode)) return 'sandbox';
+
+    const railwayEnvironment = String(
+        process.env.RAILWAY_ENVIRONMENT_NAME ||
+        process.env.RAILWAY_ENVIRONMENT ||
+        ''
+    ).trim().toLowerCase();
+
+    return process.env.NODE_ENV === 'production' || railwayEnvironment.includes('production')
+        ? 'production'
+        : 'sandbox';
+}
+
+function normalizeAsaasBaseUrl(value) {
+    const baseUrl = String(value || '').trim().replace(/\/+$/, '');
+    if (!baseUrl) return '';
+    return /\/v3$/i.test(baseUrl) ? baseUrl : `${baseUrl}/v3`;
+}
+
 const ASAAS_API_KEY = process.env.ASAAS_API_KEY;
-const ASAAS_URL = process.env.ASAAS_MODE === 'production'
-    ? 'https://www.asaas.com/api/v3'
-    : 'https://sandbox.asaas.com/api/v3';
+const ASAAS_MODE = resolveAsaasMode();
+const ASAAS_URL = normalizeAsaasBaseUrl(process.env.ASAAS_BASE_URL) || (
+    ASAAS_MODE === 'production'
+        ? 'https://api.asaas.com/v3'
+        : 'https://api-sandbox.asaas.com/v3'
+);
 
 const asaasHeaders = {
     'access_token': ASAAS_API_KEY,
     'Content-Type': 'application/json'
 };
 
-console.log(`[Asaas] Ambiente: ${process.env.ASAAS_MODE === 'production' ? 'PRODUCTION' : 'SANDBOX'} (${ASAAS_URL}) | API key ${ASAAS_API_KEY ? 'definida' : 'AUSENTE'}`);
+console.log(`[Asaas] Ambiente: ${ASAAS_MODE === 'production' ? 'PRODUCTION' : 'SANDBOX'} (${ASAAS_URL}) | API key ${ASAAS_API_KEY ? 'definida' : 'AUSENTE'}`);
 
 // ─────────────────────────────────────────────
 // ASAAS — Clientes
@@ -1847,10 +1885,10 @@ app.get('/api/admin/users/:uid/verify-payment', async (req, res) => {
             if (cancellationRef) {
                 providerCancellationFields = buildStripeCancellationFields(cancellationRef);
             }
-        } else if ((sub.provider === 'asaas' || sub.asaasCustomerId) && process.env.ASAAS_API_KEY && sub.asaasCustomerId) {
-            const asaasUrl = process.env.ASAAS_MODE === 'sandbox' ? 'https://sandbox.asaas.com/api/v3' : 'https://api.asaas.com/v3';
-            const response = await axios.get(`${asaasUrl}/subscriptions?customer=${sub.asaasCustomerId}`, {
-                headers: { 'access_token': process.env.ASAAS_API_KEY }
+        } else if ((sub.provider === 'asaas' || sub.asaasCustomerId) && ASAAS_API_KEY && sub.asaasCustomerId) {
+            const response = await axios.get(`${ASAAS_URL}/subscriptions`, {
+                headers: asaasHeaders,
+                params: { customer: sub.asaasCustomerId }
             });
             const activeSub = response.data.data.find(s => s.status === 'ACTIVE');
             verified = Boolean(activeSub);
@@ -1984,6 +2022,7 @@ app.get('/api/admin/stats', async (req, res) => {
 
         // payingByUid: uid -> { provider, status, monthlyAmount }
         const payingByUid = new Map();
+        const providerErrors = [];
 
         const addPaying = (uid, provider, status, monthly, extra = {}) => {
             if (!uid) return;
@@ -2000,88 +2039,112 @@ app.get('/api/admin/stats', async (req, res) => {
 
         // 2) Assinaturas ativas no Stripe (active + trialing — mesmo criterio do verify-payment)
         if (stripe) {
-            for (const targetStatus of ['active', 'trialing']) {
-                let hasMore = true;
-                let startingAfter = undefined;
-                while (hasMore) {
-                    const params = { limit: 100, status: targetStatus, expand: ['data.customer'] };
-                    if (startingAfter) params.starting_after = startingAfter;
+            try {
+                for (const targetStatus of ['active', 'trialing']) {
+                    let hasMore = true;
+                    let startingAfter = undefined;
+                    while (hasMore) {
+                        const params = { limit: 100, status: targetStatus, expand: ['data.customer'] };
+                        if (startingAfter) params.starting_after = startingAfter;
 
-                    const stripeSubs = await stripe.subscriptions.list(params);
+                        const stripeSubs = await stripe.subscriptions.list(params);
 
-                    for (const sub of stripeSubs.data) {
-                        const customer = sub.customer;
-                        const customerId = typeof customer === 'string' ? customer : customer?.id;
+                        for (const sub of stripeSubs.data) {
+                            const customer = sub.customer;
+                            const customerId = typeof customer === 'string' ? customer : customer?.id;
 
-                        let uid = null;
-                        if (typeof customer === 'object' && customer?.metadata?.firebaseUID) {
-                            uid = customer.metadata.firebaseUID;
+                            let uid = null;
+                            if (typeof customer === 'object' && customer?.metadata?.firebaseUID) {
+                                uid = customer.metadata.firebaseUID;
+                            }
+                            if (!uid && customerId) {
+                                const u = usersByStripeCustomerId.get(customerId);
+                                if (u) uid = u.uid;
+                            }
+                            if (!uid) continue;
+                            if (payingByUid.has(uid)) continue;
+
+                            const item = sub.items?.data?.[0];
+                            const price = item?.price;
+                            const unitAmount = (price?.unit_amount ?? 0) / 100;
+                            const interval = price?.recurring?.interval || null;
+                            const monthly = unitAmount > 0
+                                ? (interval === 'year' ? unitAmount / 12 : unitAmount)
+                                : 0;
+
+                            addPaying(uid, 'stripe', sub.status, monthly, {
+                                ...buildStripeCancellationFields(sub),
+                                currentPeriodEnd: formatStripeDateIso(sub?.current_period_end),
+                                nextBillingDate: formatStripeDateOnly(sub?.current_period_end),
+                            });
                         }
-                        if (!uid && customerId) {
-                            const u = usersByStripeCustomerId.get(customerId);
-                            if (u) uid = u.uid;
+
+                        hasMore = stripeSubs.has_more;
+                        if (hasMore && stripeSubs.data.length > 0) {
+                            startingAfter = stripeSubs.data[stripeSubs.data.length - 1].id;
                         }
-                        if (!uid) continue;
-                        if (payingByUid.has(uid)) continue;
-
-                        const item = sub.items?.data?.[0];
-                        const price = item?.price;
-                        const unitAmount = (price?.unit_amount ?? 0) / 100;
-                        const interval = price?.recurring?.interval || null;
-                        const monthly = unitAmount > 0
-                            ? (interval === 'year' ? unitAmount / 12 : unitAmount)
-                            : 0;
-
-                        addPaying(uid, 'stripe', sub.status, monthly, {
-                            ...buildStripeCancellationFields(sub),
-                            currentPeriodEnd: formatStripeDateIso(sub?.current_period_end),
-                            nextBillingDate: formatStripeDateOnly(sub?.current_period_end),
-                        });
-                    }
-
-                    hasMore = stripeSubs.has_more;
-                    if (hasMore && stripeSubs.data.length > 0) {
-                        startingAfter = stripeSubs.data[stripeSubs.data.length - 1].id;
                     }
                 }
+            } catch (error) {
+                providerErrors.push(buildProviderError('stripe', error));
+                console.error('[admin/stats] Falha ao consultar Stripe:', error.response?.data || error.message);
             }
         }
 
         // 3) Assinaturas ativas no Asaas
         if (ASAAS_API_KEY) {
-            const pageLimit = 100;
-            let offset = 0;
-            let hasMore = true;
-            const maxIterations = 200;
-            let iterations = 0;
+            try {
+                const pageLimit = 100;
+                let offset = 0;
+                let hasMore = true;
+                const maxIterations = 200;
+                let iterations = 0;
 
-            while (hasMore && iterations < maxIterations) {
-                iterations++;
-                const response = await axios.get(`${ASAAS_URL}/subscriptions`, {
-                    headers: asaasHeaders,
-                    params: { status: 'ACTIVE', limit: pageLimit, offset }
-                });
-                const list = response.data?.data || [];
+                while (hasMore && iterations < maxIterations) {
+                    iterations++;
+                    const response = await axios.get(`${ASAAS_URL}/subscriptions`, {
+                        headers: asaasHeaders,
+                        params: { status: 'ACTIVE', limit: pageLimit, offset }
+                    });
+                    const list = response.data?.data || [];
 
-                for (const sub of list) {
-                    const customerId = sub.customer;
-                    if (!customerId) continue;
-                    const u = usersByAsaasCustomerId.get(customerId);
-                    if (!u) continue;
-                    if (payingByUid.has(u.uid)) continue;
+                    for (const sub of list) {
+                        const customerId = sub.customer;
+                        if (!customerId) continue;
+                        const u = usersByAsaasCustomerId.get(customerId);
+                        if (!u) continue;
+                        if (payingByUid.has(u.uid)) continue;
 
-                    const rawValue = parseMoneyValue(sub.value);
-                    const cycle = String(sub.cycle || '').toUpperCase();
-                    const monthly = rawValue > 0
-                        ? (cycle === 'YEARLY' ? rawValue / 12 : rawValue)
-                        : 0;
+                        const rawValue = parseMoneyValue(sub.value);
+                        const cycle = String(sub.cycle || '').toUpperCase();
+                        const monthly = rawValue > 0
+                            ? (cycle === 'YEARLY' ? rawValue / 12 : rawValue)
+                            : 0;
 
-                    addPaying(u.uid, 'asaas', 'active', monthly);
+                        addPaying(u.uid, 'asaas', 'active', monthly);
+                    }
+
+                    hasMore = response.data?.hasMore === true && list.length > 0;
+                    offset += pageLimit;
                 }
 
-                hasMore = response.data?.hasMore === true && list.length > 0;
-                offset += pageLimit;
+                if (hasMore) {
+                    providerErrors.push({
+                        provider: 'asaas',
+                        status: null,
+                        message: 'Limite de paginacao do Asaas atingido; dados podem estar parciais.',
+                    });
+                }
+            } catch (error) {
+                providerErrors.push(buildProviderError('asaas', error));
+                console.error('[admin/stats] Falha ao consultar Asaas:', error.response?.data || error.message);
             }
+        } else if (usersByAsaasCustomerId.size > 0) {
+            providerErrors.push({
+                provider: 'asaas',
+                status: null,
+                message: 'ASAAS_API_KEY ausente; assinaturas Asaas nao foram verificadas.',
+            });
         }
 
         // 4) Média de dias de uso entre os assinantes ativos + MRR
@@ -2108,6 +2171,8 @@ app.get('/api/admin/stats', async (req, res) => {
             totalUsers: usersByUid.size,
             canceledStripeInMrrCount,
             payingUsers: Array.from(payingByUid.values()),
+            providerErrors,
+            isPartial: providerErrors.length > 0,
             generatedAt: new Date().toISOString(),
         });
     } catch (error) {
@@ -3081,4 +3146,3 @@ app.listen(PORT, () => {
     console.log(`🚀 Servidor rodando em http://localhost:${PORT}`);
     console.log(`🌐 Asaas: ${ASAAS_URL}`);
 });
-

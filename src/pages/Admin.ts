@@ -15,6 +15,8 @@ type AdminStats = {
   avgActiveDaysOfPaying: number;
   totalUsers: number;
   canceledStripeInMrrCount?: number;
+  providerErrors?: Array<{ provider: string; status?: number | null; message?: string }>;
+  isPartial?: boolean;
   generatedAt: string;
 };
 
@@ -139,6 +141,15 @@ function providerLabel(provider: string | null | undefined): string {
 
 function boolLabel(value: boolean): string {
   return value ? 'Ativo' : 'Inativo';
+}
+
+function providerErrorHint(errors: AdminStats['providerErrors']): string | null {
+  if (!errors?.length) return null;
+  const names = errors
+    .map((error) => providerLabel(error.provider))
+    .filter(Boolean)
+    .join(', ');
+  return `Dados parciais: falha ao consultar ${names || 'provedores'}.`;
 }
 
 async function getAdminToken(): Promise<string> {
@@ -718,27 +729,28 @@ function checkboxField(name: string, label: string, checked: boolean): string {
 async function loadStats(): Promise<void> {
   try {
     const data = await adminFetch<AdminStats>('/api/admin/stats');
+    const partialHint = providerErrorHint(data.providerErrors);
 
     setKpiValue(
       'kpi-active-subs',
       numberFormatter.format(data.activeSubscribersCount),
-      `${numberFormatter.format(data.totalUsers)} usuarios no total`
+      partialHint || `${numberFormatter.format(data.totalUsers)} usuarios no total`
     );
     setKpiValue(
       'kpi-mrr',
       moneyFormatter.format(data.mrr),
-      data.canceledStripeInMrrCount && data.canceledStripeInMrrCount > 0
+      partialHint || (data.canceledStripeInMrrCount && data.canceledStripeInMrrCount > 0
         ? `Inclui ${numberFormatter.format(data.canceledStripeInMrrCount)} cancelamento${data.canceledStripeInMrrCount === 1 ? '' : 's'} Stripe`
-        : 'Soma das mensalidades reais'
+        : 'Soma das mensalidades reais')
     );
 
     const avg = data.avgActiveDaysOfPaying;
     setKpiValue(
       'kpi-avg-days',
       `${numberFormatter.format(Math.round(avg))} dia${Math.round(avg) === 1 ? '' : 's'}`,
-      data.activeSubscribersCount > 0
+      partialHint || (data.activeSubscribersCount > 0
         ? `Media entre ${numberFormatter.format(data.activeSubscribersCount)} assinante${data.activeSubscribersCount === 1 ? '' : 's'}`
-        : 'Sem assinantes ativos'
+        : 'Sem assinantes ativos')
     );
   } catch (err: any) {
     console.error('[Admin] Falha ao carregar stats:', err);
@@ -1455,7 +1467,7 @@ export function renderAdmin(user: any) {
   if (auth.currentUser) {
     runLoad();
   } else {
-    const unsubscribe = auth.onAuthStateChanged((u) => {
+    const unsubscribe = auth.onAuthStateChanged((u: any) => {
       unsubscribe();
       if (u) runLoad();
     });
