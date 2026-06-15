@@ -68,7 +68,7 @@ async function updateUserPlan(uid, plan, status, extra = {}) {
  */
 async function getUidFromAsaasCustomer(customerId) {
     if (!customerId) return null;
-    const res = await axios.get(`${ASAAS_URL}/customers/${customerId}`, { headers: asaasHeaders });
+    const res = await asaasGet(`/customers/${customerId}`);
     return res.data?.externalReference || null;
 }
 
@@ -741,13 +741,27 @@ function normalizeAsaasBaseUrl(value) {
     return /\/v3$/i.test(baseUrl) ? baseUrl : `${baseUrl}/v3`;
 }
 
-const ASAAS_API_KEY = process.env.ASAAS_API_KEY;
+function normalizeAsaasSecret(value) {
+    const secret = String(value || '').trim();
+    if (!secret) return '';
+    return secret.replace(/^['"]|['"]$/g, '').trim();
+}
+
+const ASAAS_PRODUCTION_URL = 'https://api.asaas.com/v3';
+const ASAAS_SANDBOX_URL = 'https://api-sandbox.asaas.com/v3';
+const ASAAS_API_KEY = normalizeAsaasSecret(process.env.ASAAS_API_KEY);
 const ASAAS_MODE = resolveAsaasMode();
-const ASAAS_URL = normalizeAsaasBaseUrl(process.env.ASAAS_BASE_URL) || (
+const ASAAS_CONFIGURED_URL = normalizeAsaasBaseUrl(process.env.ASAAS_BASE_URL);
+const ASAAS_URL = ASAAS_CONFIGURED_URL || (
     ASAAS_MODE === 'production'
-        ? 'https://api.asaas.com/v3'
-        : 'https://api-sandbox.asaas.com/v3'
+        ? ASAAS_PRODUCTION_URL
+        : ASAAS_SANDBOX_URL
 );
+const ASAAS_FALLBACK_URL = ASAAS_CONFIGURED_URL
+    ? null
+    : ASAAS_URL === ASAAS_PRODUCTION_URL
+        ? ASAAS_SANDBOX_URL
+        : ASAAS_PRODUCTION_URL;
 
 const asaasHeaders = {
     'access_token': ASAAS_API_KEY,
@@ -755,6 +769,48 @@ const asaasHeaders = {
 };
 
 console.log(`[Asaas] Ambiente: ${ASAAS_MODE === 'production' ? 'PRODUCTION' : 'SANDBOX'} (${ASAAS_URL}) | API key ${ASAAS_API_KEY ? 'definida' : 'AUSENTE'}`);
+
+function getAsaasUrlsToTry() {
+    return [ASAAS_URL, ASAAS_FALLBACK_URL].filter(Boolean);
+}
+
+function buildAsaasRequestOptions(options = {}) {
+    return {
+        ...options,
+        headers: {
+            ...asaasHeaders,
+            ...(options.headers || {}),
+        },
+    };
+}
+
+function shouldTryAsaasFallback(error, baseUrl) {
+    return Boolean(
+        ASAAS_FALLBACK_URL &&
+        baseUrl !== ASAAS_FALLBACK_URL &&
+        Number(error?.response?.status) === 401
+    );
+}
+
+async function asaasGet(path, options = {}) {
+    let lastError = null;
+    for (const baseUrl of getAsaasUrlsToTry()) {
+        try {
+            const response = await axios.get(`${baseUrl}${path}`, buildAsaasRequestOptions(options));
+            if (baseUrl !== ASAAS_URL) {
+                console.warn(`[Asaas] Requisicao funcionou usando fallback: ${baseUrl}`);
+            }
+            return response;
+        } catch (error) {
+            lastError = error;
+            if (!shouldTryAsaasFallback(error, baseUrl)) {
+                throw error;
+            }
+            console.warn(`[Asaas] ${baseUrl} retornou 401; tentando ambiente alternativo.`);
+        }
+    }
+    throw lastError;
+}
 
 // ─────────────────────────────────────────────
 // ASAAS — Clientes
@@ -980,7 +1036,7 @@ app.post('/api/asaas/create-charge', async (req, res) => {
 
         // 3. Se for PIX, buscar QR Code
         if (billingType === 'PIX') {
-            const qrRes = await axios.get(`${ASAAS_URL}/payments/${payment.id}/pixQrCode`, { headers: asaasHeaders });
+            const qrRes = await asaasGet(`/payments/${payment.id}/pixQrCode`);
             return res.status(200).json({ ...payment, pixQrCode: qrRes.data });
         }
 
@@ -1114,7 +1170,7 @@ app.post('/api/asaas/sync-credits/checkout', async (req, res) => {
         let pixQrCode = null;
         if (billingType === 'PIX') {
             try {
-                const qrRes = await axios.get(`${ASAAS_URL}/payments/${payment.id}/pixQrCode`, { headers: asaasHeaders });
+                const qrRes = await asaasGet(`/payments/${payment.id}/pixQrCode`);
                 pixQrCode = qrRes.data;
             } catch (qrError) {
                 const qrErrorPayload = qrError.response?.data || {};
@@ -1181,7 +1237,7 @@ app.get('/api/asaas/sync-credits/payments/:paymentId', async (req, res) => {
     }
 
     try {
-        const paymentRes = await axios.get(`${ASAAS_URL}/payments/${paymentId}`, { headers: asaasHeaders });
+        const paymentRes = await asaasGet(`/payments/${paymentId}`);
         const payment = paymentRes.data;
         const parsedReference = parseSyncCreditExternalReference(payment.externalReference);
 
@@ -1383,7 +1439,7 @@ app.post('/api/asaas/sync-subscription', async (req, res) => {
         // 1. Busca direto pelo subscriptionId
         if (subscriptionId) {
             try {
-                const subRes = await axios.get(`${ASAAS_URL}/subscriptions/${subscriptionId}`, { headers: asaasHeaders });
+                const subRes = await asaasGet(`/subscriptions/${subscriptionId}`);
                 asaasSubscription = subRes.data;
                 if (asaasSubscription?.customer) {
                     foundAsaasCustomer = { id: asaasSubscription.customer };
@@ -1396,8 +1452,7 @@ app.post('/api/asaas/sync-subscription', async (req, res) => {
         // 2. Fallback: busca pelo customerId
         if (!asaasSubscription && customerId) {
             try {
-                const listRes = await axios.get(`${ASAAS_URL}/subscriptions`, {
-                    headers: asaasHeaders,
+                const listRes = await asaasGet('/subscriptions', {
                     params: { customer: customerId, limit: 10 }
                 });
                 const items = listRes.data?.data || [];
@@ -1415,8 +1470,7 @@ app.post('/api/asaas/sync-subscription', async (req, res) => {
         // a melhor sub priorizando ACTIVE > OVERDUE > qualquer outra status.
         const lookupByCustomerFilter = async (filterParams, label) => {
             try {
-                const custRes = await axios.get(`${ASAAS_URL}/customers`, {
-                    headers: asaasHeaders,
+                const custRes = await asaasGet('/customers', {
                     params: { ...filterParams, limit: 5 }
                 });
                 const customers = custRes.data?.data || [];
@@ -1429,8 +1483,7 @@ app.post('/api/asaas/sync-subscription', async (req, res) => {
                 for (const cust of customers) {
                     if (!foundAsaasCustomer) foundAsaasCustomer = cust;
                     try {
-                        const subRes = await axios.get(`${ASAAS_URL}/subscriptions`, {
-                            headers: asaasHeaders,
+                        const subRes = await asaasGet('/subscriptions', {
                             params: { customer: cust.id, limit: 10 }
                         });
                         const items = subRes.data?.data || [];
@@ -1886,8 +1939,7 @@ app.get('/api/admin/users/:uid/verify-payment', async (req, res) => {
                 providerCancellationFields = buildStripeCancellationFields(cancellationRef);
             }
         } else if ((sub.provider === 'asaas' || sub.asaasCustomerId) && ASAAS_API_KEY && sub.asaasCustomerId) {
-            const response = await axios.get(`${ASAAS_URL}/subscriptions`, {
-                headers: asaasHeaders,
+            const response = await asaasGet('/subscriptions', {
                 params: { customer: sub.asaasCustomerId }
             });
             const activeSub = response.data.data.find(s => s.status === 'ACTIVE');
@@ -2037,6 +2089,49 @@ app.get('/api/admin/stats', async (req, res) => {
             });
         };
 
+        const addAsaasSubscription = (user, sub) => {
+            if (!user || !sub) return false;
+            if (payingByUid.has(user.uid)) return false;
+
+            const rawValue = parseMoneyValue(sub.value);
+            const cycle = String(sub.cycle || '').toUpperCase();
+            const monthly = rawValue > 0
+                ? (cycle === 'YEARLY' ? rawValue / 12 : rawValue)
+                : 0;
+
+            addPaying(user.uid, 'asaas', String(sub.status || 'active').toLowerCase(), monthly, {
+                nextBillingDate: sub.nextDueDate || null,
+            });
+            return true;
+        };
+
+        const loadAsaasByCustomers = async () => {
+            let checked = 0;
+            let matched = 0;
+            let failed = 0;
+
+            for (const [customerId, user] of usersByAsaasCustomerId) {
+                if (payingByUid.has(user.uid)) continue;
+                checked++;
+
+                try {
+                    const response = await asaasGet('/subscriptions', {
+                        params: { customer: customerId, limit: 100 }
+                    });
+                    const list = response.data?.data || [];
+                    const activeSub = list.find(s => String(s.status || '').toUpperCase() === 'ACTIVE');
+                    if (activeSub && addAsaasSubscription(user, activeSub)) {
+                        matched++;
+                    }
+                } catch (error) {
+                    failed++;
+                    console.warn(`[admin/stats] Falha ao consultar Asaas customer=${customerId}:`, error.response?.data || error.message);
+                }
+            }
+
+            return { checked, matched, failed };
+        };
+
         // 2) Assinaturas ativas no Stripe (active + trialing — mesmo criterio do verify-payment)
         if (stripe) {
             try {
@@ -2099,11 +2194,11 @@ app.get('/api/admin/stats', async (req, res) => {
                 let hasMore = true;
                 const maxIterations = 200;
                 let iterations = 0;
+                let asaasMatched = 0;
 
                 while (hasMore && iterations < maxIterations) {
                     iterations++;
-                    const response = await axios.get(`${ASAAS_URL}/subscriptions`, {
-                        headers: asaasHeaders,
+                    const response = await asaasGet('/subscriptions', {
                         params: { status: 'ACTIVE', limit: pageLimit, offset }
                     });
                     const list = response.data?.data || [];
@@ -2113,15 +2208,9 @@ app.get('/api/admin/stats', async (req, res) => {
                         if (!customerId) continue;
                         const u = usersByAsaasCustomerId.get(customerId);
                         if (!u) continue;
-                        if (payingByUid.has(u.uid)) continue;
-
-                        const rawValue = parseMoneyValue(sub.value);
-                        const cycle = String(sub.cycle || '').toUpperCase();
-                        const monthly = rawValue > 0
-                            ? (cycle === 'YEARLY' ? rawValue / 12 : rawValue)
-                            : 0;
-
-                        addPaying(u.uid, 'asaas', 'active', monthly);
+                        if (addAsaasSubscription(u, sub)) {
+                            asaasMatched++;
+                        }
                     }
 
                     hasMore = response.data?.hasMore === true && list.length > 0;
@@ -2135,9 +2224,30 @@ app.get('/api/admin/stats', async (req, res) => {
                         message: 'Limite de paginacao do Asaas atingido; dados podem estar parciais.',
                     });
                 }
+
+                if (asaasMatched === 0 && usersByAsaasCustomerId.size > 0) {
+                    const fallbackResult = await loadAsaasByCustomers();
+                    if (fallbackResult.failed > 0 && fallbackResult.failed >= fallbackResult.checked) {
+                        providerErrors.push({
+                            provider: 'asaas',
+                            status: null,
+                            message: 'Asaas respondeu sem assinaturas na listagem global e falhou na verificacao por cliente.',
+                        });
+                    }
+                }
             } catch (error) {
-                providerErrors.push(buildProviderError('asaas', error));
-                console.error('[admin/stats] Falha ao consultar Asaas:', error.response?.data || error.message);
+                console.warn('[admin/stats] Listagem global do Asaas falhou; tentando por customerId:', error.response?.data || error.message);
+                const fallbackResult = await loadAsaasByCustomers();
+                if (fallbackResult.failed > 0 && fallbackResult.failed >= fallbackResult.checked) {
+                    providerErrors.push(buildProviderError('asaas', error));
+                    console.error('[admin/stats] Falha ao consultar Asaas:', error.response?.data || error.message);
+                } else if (fallbackResult.failed > 0) {
+                    providerErrors.push({
+                        provider: 'asaas',
+                        status: null,
+                        message: 'Alguns clientes Asaas nao puderam ser verificados.',
+                    });
+                }
             }
         } else if (usersByAsaasCustomerId.size > 0) {
             providerErrors.push({
@@ -2691,8 +2801,7 @@ async function computeActivePayingUids() {
         let iterations = 0;
         while (hasMore && iterations < maxIterations) {
             iterations++;
-            const response = await axios.get(`${ASAAS_URL}/subscriptions`, {
-                headers: asaasHeaders,
+            const response = await asaasGet('/subscriptions', {
                 params: { status: 'ACTIVE', limit: pageLimit, offset }
             });
             const list = response.data?.data || [];
