@@ -1,9 +1,10 @@
-import 'dotenv/config';
+import './loadEnv.js';
 import express from 'express';
 import cors from 'cors';
 import axios from 'axios';
 import admin from 'firebase-admin';
 import fs from 'fs';
+import { createPrivateKey, sign as cryptoSign } from 'crypto';
 import pluggyRouter from './api/pluggy.js';
 import stripeRouter, { handleStripeWebhook, isStripeReady, createRemarketingCheckoutSession, createUniquePromoCode } from './api/stripe.js';
 import aiRouter from './api/ai.js';
@@ -22,7 +23,7 @@ try {
     if (process.env.FIREBASE_SERVICE_ACCOUNT) {
         const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
         admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
-        console.log('✅ Firebase Admin inicializado via .env.');
+        console.log('✅ Firebase Admin inicializado via FIREBASE_SERVICE_ACCOUNT.');
     } else if (fs.existsSync('./serviceAccountKey.json')) {
         const serviceAccount = JSON.parse(fs.readFileSync('./serviceAccountKey.json', 'utf8'));
         admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
@@ -154,6 +155,418 @@ function buildProviderError(provider, error) {
     return { provider, status, message };
 }
 
+function normalizeBillingProvider(provider) {
+    const normalized = String(provider || '').trim().toLowerCase();
+    if (['app_store', 'appstore', 'apple', 'ios', 'iphone', 'storekit'].includes(normalized)) return 'apple';
+    if (['google_play', 'googleplay', 'play_store', 'playstore', 'android', 'google'].includes(normalized)) return 'android';
+    if (normalized === 'asaas') return 'asaas';
+    if (normalized === 'stripe') return 'stripe';
+    return normalized || 'unknown';
+}
+
+function firstNonEmptyValue(...values) {
+    return values.find((value) => value !== undefined && value !== null && String(value).trim() !== '') || null;
+}
+
+function normalizePem(value) {
+    if (!value) return null;
+    return String(value)
+        .replace(/\\n/g, '\n')
+        .replace(/^"|"$/g, '')
+        .trim();
+}
+
+function readJsonFromEnv(...envNames) {
+    for (const envName of envNames) {
+        const raw = process.env[envName];
+        if (!raw) continue;
+
+        try {
+            const value = String(raw).trim();
+            if (value.startsWith('{')) return JSON.parse(value);
+
+            if (fs.existsSync(value)) {
+                return JSON.parse(fs.readFileSync(value, 'utf8'));
+            }
+
+            const decoded = Buffer.from(value, 'base64').toString('utf8');
+            if (decoded.trim().startsWith('{')) return JSON.parse(decoded);
+        } catch (error) {
+            throw new Error(`${envName} invalido: ${error.message}`);
+        }
+    }
+
+    return null;
+}
+
+function base64Url(input) {
+    return Buffer.from(input)
+        .toString('base64')
+        .replace(/=/g, '')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_');
+}
+
+function createSignedJwt({ header, payload, privateKey, algorithm }) {
+    const encodedHeader = base64Url(JSON.stringify(header));
+    const encodedPayload = base64Url(JSON.stringify(payload));
+    const signingInput = `${encodedHeader}.${encodedPayload}`;
+    const key = createPrivateKey(privateKey);
+    const signature = algorithm === 'ES256'
+        ? cryptoSign('sha256', Buffer.from(signingInput), { key, dsaEncoding: 'ieee-p1363' })
+        : cryptoSign('RSA-SHA256', Buffer.from(signingInput), key);
+
+    return `${signingInput}.${base64Url(signature)}`;
+}
+
+function decodeJwtPayload(token) {
+    try {
+        const payload = String(token || '').split('.')[1];
+        if (!payload) return null;
+        const padded = payload.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(payload.length / 4) * 4, '=');
+        return JSON.parse(Buffer.from(padded, 'base64').toString('utf8'));
+    } catch {
+        return null;
+    }
+}
+
+function getAppleOriginalTransactionId(data = {}, sub = {}) {
+    return firstNonEmptyValue(
+        sub.appleOriginalTransactionId,
+        sub.appStoreOriginalTransactionId,
+        sub.originalTransactionId,
+        sub.original_transaction_id,
+        sub.storeKitOriginalTransactionId,
+        sub.latestOriginalTransactionId,
+        data.appleOriginalTransactionId,
+        data.appStoreOriginalTransactionId,
+        data.originalTransactionId,
+        data?.mobileSubscription?.appleOriginalTransactionId,
+        data?.storeKit?.originalTransactionId
+    );
+}
+
+function getGooglePlayPurchaseToken(data = {}, sub = {}) {
+    return firstNonEmptyValue(
+        sub.googlePlayPurchaseToken,
+        sub.androidPurchaseToken,
+        sub.purchaseToken,
+        sub.playPurchaseToken,
+        sub.googlePurchaseToken,
+        sub?.googlePlay?.purchaseToken,
+        data.googlePlayPurchaseToken,
+        data.androidPurchaseToken,
+        data.purchaseToken,
+        data?.mobileSubscription?.googlePlayPurchaseToken,
+        data?.googlePlay?.purchaseToken
+    );
+}
+
+function getGooglePlayPackageName(data = {}, sub = {}) {
+    return firstNonEmptyValue(
+        sub.googlePlayPackageName,
+        sub.androidPackageName,
+        sub.packageName,
+        data.googlePlayPackageName,
+        data.androidPackageName,
+        data.packageName,
+        process.env.GOOGLE_PLAY_PACKAGE_NAME,
+        'com.gustavodev25.controlarapp'
+    );
+}
+
+function getMobileProviderFromData(data = {}, sub = {}) {
+    const provider = normalizeBillingProvider(firstNonEmptyValue(sub.provider, data.provider, data.subscriptionProvider));
+    if (provider !== 'unknown') return provider;
+    if (getAppleOriginalTransactionId(data, sub)) return 'apple';
+    if (getGooglePlayPurchaseToken(data, sub)) return 'android';
+    return 'unknown';
+}
+
+function getAppleServerConfig() {
+    const privateKey = normalizePem(
+        process.env.APPLE_APP_STORE_PRIVATE_KEY ||
+        process.env.APPLE_IAP_PRIVATE_KEY ||
+        process.env.APPLE_PRIVATE_KEY ||
+        (process.env.APPLE_PRIVATE_KEY_PATH && fs.existsSync(process.env.APPLE_PRIVATE_KEY_PATH)
+            ? fs.readFileSync(process.env.APPLE_PRIVATE_KEY_PATH, 'utf8')
+            : null)
+    );
+
+    const issuerId = process.env.APPLE_APP_STORE_ISSUER_ID || process.env.APPLE_IAP_ISSUER_ID || process.env.APPLE_ISSUER_ID || null;
+    const keyId = process.env.APPLE_APP_STORE_KEY_ID || process.env.APPLE_IAP_KEY_ID || process.env.APPLE_KEY_ID || null;
+    const bundleId = process.env.APPLE_APP_BUNDLE_ID || process.env.APPLE_IAP_BUNDLE_ID || process.env.APPLE_BUNDLE_ID || null;
+    const environment = String(process.env.APPLE_APP_STORE_ENV || process.env.APPLE_IAP_ENV || process.env.APPLE_ENV || 'production').toLowerCase();
+
+    if (!privateKey || !issuerId || !keyId || !bundleId) {
+        console.warn('[Apple IAP] Config incompleta:', {
+            privateKey: privateKey ? '✅ presente' : '❌ ausente',
+            issuerId: issuerId ? '✅ presente' : '❌ ausente',
+            keyId: keyId ? '✅ presente' : '❌ ausente',
+            bundleId: bundleId ? '✅ presente' : '❌ ausente',
+        });
+        return null;
+    }
+
+    return {
+        privateKey,
+        issuerId,
+        keyId,
+        bundleId,
+        baseUrl: environment === 'sandbox'
+            ? 'https://api.storekit-sandbox.itunes.apple.com'
+            : 'https://api.storekit.itunes.apple.com',
+    };
+}
+
+function createAppleServerToken(config) {
+    const now = Math.floor(Date.now() / 1000);
+    return createSignedJwt({
+        algorithm: 'ES256',
+        header: { alg: 'ES256', kid: config.keyId, typ: 'JWT' },
+        payload: {
+            iss: config.issuerId,
+            iat: now,
+            exp: now + 900,
+            aud: 'appstoreconnect-v1',
+            bid: config.bundleId,
+        },
+        privateKey: config.privateKey,
+    });
+}
+
+function getAppleStatusInfo(status) {
+    const normalized = Number(status);
+    const map = {
+        1: { status: 'active', verified: true, paying: true },
+        2: { status: 'expired', verified: false, paying: false },
+        3: { status: 'billing_retry', verified: true, paying: false },
+        4: { status: 'billing_grace_period', verified: true, paying: true },
+        5: { status: 'revoked', verified: false, paying: false },
+    };
+    return map[normalized] || { status: String(status || 'unknown').toLowerCase(), verified: false, paying: false };
+}
+
+function getLatestAppleTransaction(responseData = {}) {
+    const candidates = [];
+    for (const group of responseData.data || []) {
+        for (const item of group.lastTransactions || []) {
+            const tx = decodeJwtPayload(item.signedTransactionInfo) || {};
+            const renewal = decodeJwtPayload(item.signedRenewalInfo) || {};
+            const statusInfo = getAppleStatusInfo(item.status);
+            candidates.push({
+                statusInfo,
+                rawStatus: item.status,
+                transaction: tx,
+                renewal,
+                expiresAtMs: Number(tx.expiresDate || tx.expiresDateMillis || 0),
+                originalTransactionId: item.originalTransactionId || tx.originalTransactionId || null,
+            });
+        }
+    }
+
+    candidates.sort((a, b) => (b.expiresAtMs || 0) - (a.expiresAtMs || 0));
+    return candidates[0] || null;
+}
+
+function getStoreMonthlyAmountFromValue(value, billingCycle = null) {
+    const raw = parseMoneyValue(value);
+    if (!raw) return 0;
+    return isAnnualBillingCycle(billingCycle) ? raw / 12 : raw;
+}
+
+async function verifyAppleStoreSubscription(originalTransactionId, fallback = {}) {
+    const config = getAppleServerConfig();
+    if (!config) {
+        return { configured: false, verified: false, paying: false, status: 'not_configured' };
+    }
+    if (!originalTransactionId) {
+        return { configured: true, verified: false, paying: false, status: 'missing_token' };
+    }
+
+    const token = createAppleServerToken(config);
+    const response = await axios.get(
+        `${config.baseUrl}/inApps/v1/subscriptions/${encodeURIComponent(originalTransactionId)}`,
+        {
+            timeout: 20000,
+            headers: {
+                Authorization: `Bearer ${token}`,
+                Accept: 'application/json',
+            },
+        }
+    );
+
+    const latest = getLatestAppleTransaction(response.data);
+    if (!latest) {
+        return { configured: true, verified: false, paying: false, status: 'not_found' };
+    }
+
+    const transaction = latest.transaction || {};
+    const renewal = latest.renewal || {};
+    const price = Number(transaction.price || 0);
+    const amount = price > 0 ? price / 1000 : getStoreMonthlyAmountFromValue(fallback.amount, fallback.billingCycle);
+    const expiresAt = latest.expiresAtMs ? new Date(latest.expiresAtMs).toISOString() : null;
+
+    // offerType: 1 = introductory/free trial, 2 = promotional, 3 = offer code
+    const offerType = Number(transaction.offerType || 0);
+    const isTrialing = offerType === 1 && latest.statusInfo.status === 'active';
+    const purchaseDateMs = Number(transaction.purchaseDate || transaction.originalPurchaseDate || 0);
+    const trialStartedAt = purchaseDateMs ? new Date(purchaseDateMs).toISOString() : null;
+    const trialEndsAt = isTrialing && expiresAt ? expiresAt : null;
+    const trialDays = (isTrialing && purchaseDateMs && latest.expiresAtMs)
+        ? Math.max(1, Math.round((latest.expiresAtMs - purchaseDateMs) / 86400000))
+        : null;
+
+    return {
+        configured: true,
+        verified: latest.statusInfo.verified,
+        paying: isTrialing ? false : latest.statusInfo.paying,
+        status: isTrialing ? 'trialing' : latest.statusInfo.status,
+        isTrialing,
+        monthlyAmount: amount,
+        productId: transaction.productId || fallback.productId || null,
+        originalTransactionId: latest.originalTransactionId || originalTransactionId,
+        currentPeriodEnd: expiresAt,
+        nextBillingDate: expiresAt ? expiresAt.split('T')[0] : null,
+        rawStatus: latest.rawStatus,
+        trialDays,
+        trialStartedAt,
+        trialStartedDate: trialStartedAt ? trialStartedAt.split('T')[0] : null,
+        trialEndsAt,
+        trialEndsDate: trialEndsAt ? trialEndsAt.split('T')[0] : null,
+    };
+}
+
+let googlePlayTokenCache = { accessToken: null, expiresAt: 0 };
+
+function getGooglePlayServiceAccount() {
+    const account = readJsonFromEnv(
+        'GOOGLE_PLAY_SERVICE_ACCOUNT_JSON',
+        'GOOGLE_SERVICE_ACCOUNT_JSON',
+        'ANDROID_PUBLISHER_SERVICE_ACCOUNT_JSON'
+    );
+    if (account) return account;
+
+    const privateKey = normalizePem(process.env.GOOGLE_PLAY_PRIVATE_KEY || process.env.GOOGLE_PRIVATE_KEY);
+    const clientEmail = process.env.GOOGLE_PLAY_CLIENT_EMAIL || process.env.GOOGLE_CLIENT_EMAIL;
+    if (privateKey && clientEmail) {
+        return {
+            private_key: privateKey,
+            client_email: clientEmail,
+            token_uri: 'https://oauth2.googleapis.com/token',
+        };
+    }
+
+    return null;
+}
+
+async function getGooglePlayAccessToken() {
+    if (googlePlayTokenCache.accessToken && googlePlayTokenCache.expiresAt > Date.now() + 60000) {
+        return googlePlayTokenCache.accessToken;
+    }
+
+    const account = getGooglePlayServiceAccount();
+    if (!account?.client_email || !account?.private_key) return null;
+
+    const now = Math.floor(Date.now() / 1000);
+    const tokenUri = account.token_uri || 'https://oauth2.googleapis.com/token';
+    const assertion = createSignedJwt({
+        algorithm: 'RS256',
+        header: { alg: 'RS256', typ: 'JWT' },
+        payload: {
+            iss: account.client_email,
+            scope: 'https://www.googleapis.com/auth/androidpublisher',
+            aud: tokenUri,
+            iat: now,
+            exp: now + 3600,
+        },
+        privateKey: normalizePem(account.private_key),
+    });
+
+    const response = await axios.post(
+        tokenUri,
+        new URLSearchParams({
+            grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+            assertion,
+        }).toString(),
+        {
+            timeout: 20000,
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        }
+    );
+
+    googlePlayTokenCache = {
+        accessToken: response.data.access_token,
+        expiresAt: Date.now() + (Number(response.data.expires_in || 3600) * 1000),
+    };
+
+    return googlePlayTokenCache.accessToken;
+}
+
+function getGoogleSubscriptionStatusInfo(state) {
+    const normalized = String(state || '').toUpperCase();
+    const map = {
+        SUBSCRIPTION_STATE_ACTIVE: { status: 'active', verified: true, paying: true },
+        SUBSCRIPTION_STATE_IN_GRACE_PERIOD: { status: 'billing_grace_period', verified: true, paying: true },
+        SUBSCRIPTION_STATE_ON_HOLD: { status: 'on_hold', verified: true, paying: false },
+        SUBSCRIPTION_STATE_PAUSED: { status: 'paused', verified: true, paying: false },
+        SUBSCRIPTION_STATE_CANCELED: { status: 'canceled', verified: false, paying: false },
+        SUBSCRIPTION_STATE_EXPIRED: { status: 'expired', verified: false, paying: false },
+        SUBSCRIPTION_STATE_PENDING: { status: 'pending', verified: false, paying: false },
+    };
+    return map[normalized] || { status: normalized.toLowerCase() || 'unknown', verified: false, paying: false };
+}
+
+function moneyToNumber(money = {}) {
+    const units = Number(money.units || 0);
+    const nanos = Number(money.nanos || 0);
+    return units + nanos / 1000000000;
+}
+
+async function verifyGooglePlaySubscription(purchaseToken, packageName, fallback = {}) {
+    const accessToken = await getGooglePlayAccessToken();
+    if (!accessToken) {
+        return { configured: false, verified: false, paying: false, status: 'not_configured' };
+    }
+    if (!purchaseToken) {
+        return { configured: true, verified: false, paying: false, status: 'missing_token' };
+    }
+
+    const response = await axios.get(
+        `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${encodeURIComponent(packageName)}/purchases/subscriptionsv2/tokens/${encodeURIComponent(purchaseToken)}`,
+        {
+            timeout: 20000,
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                Accept: 'application/json',
+            },
+        }
+    );
+
+    const statusInfo = getGoogleSubscriptionStatusInfo(response.data?.subscriptionState);
+    const lineItems = Array.isArray(response.data?.lineItems) ? response.data.lineItems : [];
+    const latestLine = [...lineItems].sort((a, b) => new Date(b.expiryTime || 0).getTime() - new Date(a.expiryTime || 0).getTime())[0] || {};
+    const recurringPrice = latestLine?.autoRenewingPlan?.recurringPrice;
+    const rawAmount = recurringPrice ? moneyToNumber(recurringPrice) : 0;
+    const amount = rawAmount > 0 ? getStoreMonthlyAmountFromValue(rawAmount, fallback.billingCycle) : getStoreMonthlyAmountFromValue(fallback.amount, fallback.billingCycle);
+    const expiryTime = latestLine.expiryTime || null;
+
+    return {
+        configured: true,
+        verified: statusInfo.verified,
+        paying: statusInfo.paying,
+        status: statusInfo.status,
+        monthlyAmount: amount,
+        productId: latestLine.productId || fallback.productId || null,
+        purchaseToken,
+        packageName,
+        orderId: response.data?.latestOrderId || latestLine.latestSuccessfulOrderId || null,
+        currentPeriodEnd: expiryTime,
+        nextBillingDate: expiryTime ? expiryTime.split('T')[0] : null,
+        rawStatus: response.data?.subscriptionState || null,
+    };
+}
+
 function getSubscriptionMonthlyAmount(sub = {}, data = {}) {
     const rawAmount = [
         sub.nextAmount,
@@ -192,6 +605,116 @@ function normalizeStoredDate(value) {
         return new Date(timestampMs).toISOString();
     }
     return String(value);
+}
+
+function normalizeSignupPlatformValue(value, isUserAgent = false) {
+    let raw = String(value || '').trim().toLowerCase();
+    if (!raw) return 'unknown';
+    // When parsing a full User-Agent string, strip engine/browser tokens that
+    // cause false positives (e.g. "AppleWebKit" is present on every Android Chrome UA).
+    if (isUserAgent) {
+        raw = raw.replace(/applewebkit/gi, '').replace(/safari/gi, '');
+    }
+    if (raw.includes('android')) return 'android';
+    if (raw.includes('iphone') || raw.includes('ipad') || raw.includes('ipod') || /(^|\W)ios(\W|$)/.test(raw) || raw.includes('apple')) return 'iphone';
+    if (raw.includes('mobile') || raw.includes('mobi') || raw.includes('celular')) return 'mobile';
+    if (raw === 'pc' || raw.includes('windows') || raw.includes('macintosh') || raw.includes('macbook') || raw.includes('linux')) return 'desktop';
+    if (raw.includes('desktop') || raw.includes('web')) return 'desktop';
+    return raw;
+}
+
+function pickSignupPlatform(candidates = [], userAgent = '') {
+    const normalized = candidates.map((value) => normalizeSignupPlatformValue(value));
+    const precisePlatform = normalized.find((platform) => platform === 'android' || platform === 'iphone');
+    if (precisePlatform) return precisePlatform;
+
+    const knownPlatform = normalized.find((platform) => platform === 'mobile' || platform === 'desktop');
+    if (knownPlatform) return knownPlatform;
+
+    const platformFromUa = userAgent ? normalizeSignupPlatformValue(userAgent, true) : 'unknown';
+    if (['android', 'iphone', 'mobile', 'desktop'].includes(platformFromUa)) return platformFromUa;
+
+    return normalized.find((platform) => platform !== 'unknown') || 'unknown';
+}
+
+function buildAdminDeviceSnapshot(device = {}, fallback = {}) {
+    return {
+        createdFromMobile: device.createdFromMobile ?? fallback.createdFromMobile ?? null,
+        signupSource: device.signupSource || fallback.signupSource || null,
+        signupPlatform: device.signupPlatform || fallback.signupPlatform || null,
+        platform: device.platform || device.os || null,
+        deviceName: device.deviceName || device.name || null,
+        deviceType: device.deviceType || device.type || null,
+        userAgent: device.userAgent || fallback.signupUserAgent || null,
+        browserPlatform: device.browserPlatform || fallback.browserPlatform || null,
+    };
+}
+
+function inferSignupDevice(data = {}) {
+    const device = data.device || data.signupDevice || data.deviceInfo || data.lastDevice || {};
+    const profile = data.profile || {};
+    const userAgent = data.signupUserAgent
+        || device.userAgent
+        || data.userAgent
+        || profile.userAgent
+        || '';
+    let platform = pickSignupPlatform([
+        data.signupPlatform,
+        device.signupPlatform,
+        profile.signupPlatform,
+        data.platform,
+        device.platform,
+        device.os,
+        data.os,
+        data.operatingSystem,
+        data.deviceName,
+        device.deviceName,
+        data.deviceType,
+        device.deviceType,
+        device.name,
+        device.type,
+        profile.platform,
+    ], userAgent);
+    const source = String(
+        data.signupSource
+        || data.createdFrom
+        || data.source
+        || device.signupSource
+        || device.createdFrom
+        || data.deviceType
+        || device.deviceType
+        || ''
+    ).trim().toLowerCase();
+    const explicitMobile = data.createdFromMobile === true
+        || device.createdFromMobile === true
+        || source === 'mobile'
+        || source === 'app'
+        || ['android', 'iphone', 'mobile'].includes(platform);
+    const explicitDesktop = data.createdFromMobile === false
+        || device.createdFromMobile === false
+        || source === 'desktop'
+        || source === 'web'
+        || source === 'pc'
+        || source === 'computer'
+        || platform === 'desktop';
+    if (platform === 'unknown') {
+        platform = explicitMobile ? 'mobile' : (explicitDesktop ? 'desktop' : 'unknown');
+    }
+    const createdFromMobile = explicitMobile ? true : (explicitDesktop ? false : null);
+
+    return {
+        createdFromMobile,
+        signupSource: createdFromMobile === true ? 'mobile' : (createdFromMobile === false ? 'desktop' : 'unknown'),
+        signupPlatform: platform,
+        signupUserAgent: userAgent || null,
+        device: buildAdminDeviceSnapshot(device, {
+            createdFromMobile,
+            signupSource: createdFromMobile === true ? 'mobile' : (createdFromMobile === false ? 'desktop' : 'unknown'),
+            signupPlatform: platform,
+            signupUserAgent: userAgent || null,
+            browserPlatform: data.browserPlatform || profile.browserPlatform || null,
+        }),
+    };
 }
 
 function buildStripeCancellationFields(subscription = {}) {
@@ -606,7 +1129,7 @@ app.use(cors({
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin', 'ngrok-skip-browser-warning'],
 }));
 
 // Responder a preflight requests globalmente (Express 5 compatível)
@@ -1694,7 +2217,13 @@ app.get('/api/admin/users', async (req, res) => {
             const name = data.name || profile.name || authUser?.displayName || email || uid;
             const disabled = Boolean(authUser?.disabled || data.disabled || data.isBlocked || data.blockedAt);
 
-            const provider = sub.provider || (sub.asaasCustomerId ? 'asaas' : sub.stripeCustomerId ? 'stripe' : 'unknown');
+            const appleOriginalTransactionId = getAppleOriginalTransactionId(data, sub);
+            const googlePlayPurchaseToken = getGooglePlayPurchaseToken(data, sub);
+            const googlePlayPackageName = getGooglePlayPackageName(data, sub);
+            const mobileProvider = getMobileProviderFromData(data, sub);
+            const provider = mobileProvider !== 'unknown'
+                ? mobileProvider
+                : (sub.asaasCustomerId ? 'asaas' : sub.stripeCustomerId ? 'stripe' : 'unknown');
             const plan = sub.plan || data.plan || 'free';
             const status = sub.status || 'unknown';
             const billingCycle = sub.billingCycle || sub.frequency || sub.interval || 'mensal';
@@ -1711,6 +2240,11 @@ app.get('/api/admin/users', async (req, res) => {
             const cancelAt = normalizeStoredDate(sub.cancelAt || sub.cancelAtDate);
             const endedAt = normalizeStoredDate(sub.endedAt || sub.endedAtDate);
             const currentPeriodEnd = normalizeStoredDate(sub.currentPeriodEnd || sub.nextBillingDate);
+            const signupDevice = inferSignupDevice(data);
+            const trialStartedAt = normalizeStoredDate(sub.trialStartedAt || sub.trialStart || sub.trial_start);
+            const trialEndsAt = normalizeStoredDate(sub.trialEndsAt || sub.trialEnd || sub.trial_end);
+            const firstPaidAt = normalizeStoredDate(sub.firstPaidAt || data.firstPaidAt || null);
+            const convertedToPaidAt = normalizeStoredDate(sub.convertedToPaidAt || sub.firstPaidAt || data.firstPaidAt || null);
 
             let createdAt = data.createdAt || authUser?.metadata?.creationTime || null;
             if (createdAt && typeof createdAt.toDate === 'function') {
@@ -1751,6 +2285,29 @@ app.get('/api/admin/users', async (req, res) => {
                 cancellationReason: sub.cancellationReason || null,
                 cancellationFeedback: sub.cancellationFeedback || null,
                 cancellationComment: sub.cancellationComment || null,
+                createdFromMobile: signupDevice.createdFromMobile,
+                signupSource: signupDevice.signupSource,
+                signupPlatform: signupDevice.signupPlatform,
+                signupUserAgent: signupDevice.signupUserAgent,
+                device: signupDevice.device,
+                appleOriginalTransactionId,
+                appStoreOriginalTransactionId: appleOriginalTransactionId,
+                googlePlayPurchaseToken,
+                androidPurchaseToken: googlePlayPurchaseToken,
+                googlePlayPackageName,
+                stripeStatus: sub.stripeStatus || null,
+                appleStatus: sub.appleStatus || null,
+                googlePlayStatus: sub.googlePlayStatus || null,
+                trialStatus: sub.trialStatus || null,
+                trialDays: Number(sub.trialDays || 0) || null,
+                trialStartedAt,
+                trialStartedDate: sub.trialStartedDate || (trialStartedAt ? trialStartedAt.split('T')[0] : null),
+                trialEndsAt,
+                trialEndsDate: sub.trialEndsDate || (trialEndsAt ? trialEndsAt.split('T')[0] : null),
+                firstPaidAt,
+                firstPaidDate: sub.firstPaidDate || (firstPaidAt ? firstPaidAt.split('T')[0] : null),
+                convertedToPaidAt,
+                convertedToPaidDate: sub.convertedToPaidDate || (convertedToPaidAt ? convertedToPaidAt.split('T')[0] : null),
                 isAdmin: data.isAdmin || false,
                 disabled,
                 isBlocked: disabled,
@@ -1785,6 +2342,29 @@ app.get('/api/admin/users', async (req, res) => {
                     isBlocked: Boolean(authUser.disabled),
                     blockedAt: null,
                     blockedBy: null,
+                    createdFromMobile: null,
+                    signupSource: 'unknown',
+                    signupPlatform: 'unknown',
+                    signupUserAgent: null,
+                    device: null,
+                    appleOriginalTransactionId: null,
+                    appStoreOriginalTransactionId: null,
+                    googlePlayPurchaseToken: null,
+                    androidPurchaseToken: null,
+                    googlePlayPackageName: null,
+                    stripeStatus: null,
+                    appleStatus: null,
+                    googlePlayStatus: null,
+                    trialStatus: null,
+                    trialDays: null,
+                    trialStartedAt: null,
+                    trialStartedDate: null,
+                    trialEndsAt: null,
+                    trialEndsDate: null,
+                    firstPaidAt: null,
+                    firstPaidDate: null,
+                    convertedToPaidAt: null,
+                    convertedToPaidDate: null,
                     createdAt: authUser.metadata?.creationTime || null,
                     lastLogin: authUser.metadata?.lastSignInTime || null,
                     activeDaysCount: 0
@@ -1915,8 +2495,10 @@ app.get('/api/admin/users/:uid/verify-payment', async (req, res) => {
         let providerMonthlyAmount = 0;
         let providerBillingCycle = null;
         let providerCancellationFields = {};
+        let providerExtraFields = {};
+        const provider = getMobileProviderFromData(data, sub);
 
-        if ((sub.provider === 'stripe' || sub.stripeCustomerId) && stripe && sub.stripeCustomerId) {
+        if ((provider === 'stripe' || sub.stripeCustomerId) && stripe && sub.stripeCustomerId) {
             const stripeSubs = await stripe.subscriptions.list({ customer: sub.stripeCustomerId, status: 'all' });
             const liveSub = stripeSubs.data.find(s => ['active', 'trialing'].includes(s.status));
             verified = Boolean(liveSub);
@@ -1938,7 +2520,7 @@ app.get('/api/admin/users/:uid/verify-payment', async (req, res) => {
             if (cancellationRef) {
                 providerCancellationFields = buildStripeCancellationFields(cancellationRef);
             }
-        } else if ((sub.provider === 'asaas' || sub.asaasCustomerId) && ASAAS_API_KEY && sub.asaasCustomerId) {
+        } else if ((provider === 'asaas' || sub.asaasCustomerId) && ASAAS_API_KEY && sub.asaasCustomerId) {
             const response = await asaasGet('/subscriptions', {
                 params: { customer: sub.asaasCustomerId }
             });
@@ -1954,6 +2536,57 @@ app.get('/api/admin/users/:uid/verify-payment', async (req, res) => {
                     providerMonthlyAmount = cycle === 'YEARLY' ? rawValue / 12 : rawValue;
                 }
             }
+        } else if (provider === 'apple') {
+            const appleResult = await verifyAppleStoreSubscription(getAppleOriginalTransactionId(data, sub), {
+                amount: sub.nextAmount || sub.price || sub.amount || data.planPrice || data.valor,
+                billingCycle: sub.billingCycle || sub.frequency || sub.interval,
+                productId: sub.productId || sub.appleProductId || null,
+            });
+            verified = appleResult.verified;
+            paying = appleResult.paying;
+            providerStatus = appleResult.status;
+            providerMonthlyAmount = appleResult.monthlyAmount || 0;
+            providerBillingCycle = sub.billingCycle || sub.frequency || sub.interval || null;
+            providerExtraFields = {
+                provider: 'apple',
+                appleStatus: appleResult.rawStatus || appleResult.status,
+                productId: appleResult.productId || null,
+                currentPeriodEnd: appleResult.currentPeriodEnd || null,
+                nextBillingDate: appleResult.nextBillingDate || null,
+                originalTransactionId: appleResult.originalTransactionId || null,
+                configured: appleResult.configured,
+                trialStatus: appleResult.isTrialing ? 'trialing' : null,
+                trialDays: appleResult.trialDays,
+                trialStartedAt: appleResult.trialStartedAt,
+                trialStartedDate: appleResult.trialStartedDate,
+                trialEndsAt: appleResult.trialEndsAt,
+                trialEndsDate: appleResult.trialEndsDate,
+            };
+        } else if (provider === 'android') {
+            const googleResult = await verifyGooglePlaySubscription(
+                getGooglePlayPurchaseToken(data, sub),
+                getGooglePlayPackageName(data, sub),
+                {
+                    amount: sub.nextAmount || sub.price || sub.amount || data.planPrice || data.valor,
+                    billingCycle: sub.billingCycle || sub.frequency || sub.interval,
+                    productId: sub.productId || sub.googlePlayProductId || sub.androidProductId || null,
+                }
+            );
+            verified = googleResult.verified;
+            paying = googleResult.paying;
+            providerStatus = googleResult.status;
+            providerMonthlyAmount = googleResult.monthlyAmount || 0;
+            providerBillingCycle = sub.billingCycle || sub.frequency || sub.interval || null;
+            providerExtraFields = {
+                provider: 'android',
+                googlePlayStatus: googleResult.rawStatus || googleResult.status,
+                productId: googleResult.productId || null,
+                currentPeriodEnd: googleResult.currentPeriodEnd || null,
+                nextBillingDate: googleResult.nextBillingDate || null,
+                packageName: googleResult.packageName || null,
+                orderId: googleResult.orderId || null,
+                configured: googleResult.configured,
+            };
         }
 
         return res.status(200).json({
@@ -1962,6 +2595,7 @@ app.get('/api/admin/users/:uid/verify-payment', async (req, res) => {
             status: providerStatus,
             monthlyAmount: providerMonthlyAmount,
             billingCycle: providerBillingCycle,
+            ...providerExtraFields,
             ...providerCancellationFields
         });
     } catch (error) {
@@ -2057,19 +2691,31 @@ app.get('/api/admin/stats', async (req, res) => {
         const usersByUid = new Map();
         const usersByStripeCustomerId = new Map();
         const usersByAsaasCustomerId = new Map();
+        const usersWithAppleToken = [];
+        const usersWithGooglePlayToken = [];
 
         for (const doc of usersSnap.docs) {
             const data = doc.data();
             const sub = data.subscription || {};
+            const appleOriginalTransactionId = getAppleOriginalTransactionId(data, sub);
+            const googlePlayPurchaseToken = getGooglePlayPurchaseToken(data, sub);
             const user = {
                 uid: doc.id,
                 activeDaysCount: Number(data.activeDaysCount) || 0,
                 stripeCustomerId: sub.stripeCustomerId || null,
                 asaasCustomerId: sub.asaasCustomerId || null,
+                appleOriginalTransactionId,
+                googlePlayPurchaseToken,
+                googlePlayPackageName: getGooglePlayPackageName(data, sub),
+                subscriptionAmount: sub.nextAmount || sub.price || sub.amount || sub.value || data.planPrice || data.valor || null,
+                billingCycle: sub.billingCycle || sub.frequency || sub.interval || null,
+                productId: sub.productId || sub.appleProductId || sub.googlePlayProductId || sub.androidProductId || null,
             };
             usersByUid.set(doc.id, user);
             if (user.stripeCustomerId) usersByStripeCustomerId.set(user.stripeCustomerId, user);
             if (user.asaasCustomerId) usersByAsaasCustomerId.set(user.asaasCustomerId, user);
+            if (user.appleOriginalTransactionId) usersWithAppleToken.push(user);
+            if (user.googlePlayPurchaseToken) usersWithGooglePlayToken.push(user);
         }
 
         // payingByUid: uid -> { provider, status, monthlyAmount }
@@ -2169,6 +2815,17 @@ app.get('/api/admin/stats', async (req, res) => {
 
                             addPaying(uid, 'stripe', sub.status, monthly, {
                                 ...buildStripeCancellationFields(sub),
+                                stripeStatus: String(sub.status || '').toLowerCase(),
+                                trialStatus: String(sub.status || '').toLowerCase() === 'trialing'
+                                    ? 'trialing'
+                                    : (sub?.trial_end ? 'ended' : null),
+                                trialDays: sub?.trial_start && sub?.trial_end
+                                    ? Math.max(1, Math.round((sub.trial_end - sub.trial_start) / 86400))
+                                    : null,
+                                trialStartedAt: formatStripeDateIso(sub?.trial_start),
+                                trialStartedDate: formatStripeDateOnly(sub?.trial_start),
+                                trialEndsAt: formatStripeDateIso(sub?.trial_end),
+                                trialEndsDate: formatStripeDateOnly(sub?.trial_end),
                                 currentPeriodEnd: formatStripeDateIso(sub?.current_period_end),
                                 nextBillingDate: formatStripeDateOnly(sub?.current_period_end),
                             });
@@ -2258,24 +2915,128 @@ app.get('/api/admin/stats', async (req, res) => {
         }
 
         // 4) Média de dias de uso entre os assinantes ativos + MRR
+        if (usersWithAppleToken.length > 0) {
+            const appleConfig = getAppleServerConfig();
+            if (!appleConfig) {
+                providerErrors.push({
+                    provider: 'apple',
+                    status: null,
+                    message: 'Credenciais da Apple ausentes; assinaturas Apple IAP/App Store nao foram verificadas.',
+                });
+            } else {
+                let failed = 0;
+                for (const user of usersWithAppleToken) {
+                    if (payingByUid.has(user.uid)) continue;
+                    try {
+                        const result = await verifyAppleStoreSubscription(user.appleOriginalTransactionId, {
+                            amount: user.subscriptionAmount,
+                            billingCycle: user.billingCycle,
+                            productId: user.productId,
+                        });
+                        if (!result.paying && !result.isTrialing) continue;
+                        addPaying(user.uid, 'apple', result.status, result.monthlyAmount || 0, {
+                            appleStatus: result.rawStatus || result.status,
+                            originalTransactionId: result.originalTransactionId,
+                            productId: result.productId,
+                            currentPeriodEnd: result.currentPeriodEnd,
+                            nextBillingDate: result.nextBillingDate,
+                            trialStatus: result.isTrialing ? 'trialing' : null,
+                            trialDays: result.trialDays,
+                            trialStartedAt: result.trialStartedAt,
+                            trialStartedDate: result.trialStartedDate,
+                            trialEndsAt: result.trialEndsAt,
+                            trialEndsDate: result.trialEndsDate,
+                        });
+                    } catch (error) {
+                        failed++;
+                        console.warn(`[admin/stats] Falha ao consultar Apple uid=${user.uid}:`, error.response?.data || error.message);
+                    }
+                }
+                if (failed > 0) {
+                    providerErrors.push({
+                        provider: 'apple',
+                        status: null,
+                        message: `${failed} assinatura${failed !== 1 ? 's' : ''} Apple IAP nao puderam ser verificadas.`,
+                    });
+                }
+            }
+        }
+
+        if (usersWithGooglePlayToken.length > 0) {
+            const googleAccount = getGooglePlayServiceAccount();
+            if (!googleAccount) {
+                providerErrors.push({
+                    provider: 'android',
+                    status: null,
+                    message: 'Credenciais do Google Play ausentes; assinaturas Google Play nao foram verificadas.',
+                });
+            } else {
+                let failed = 0;
+                for (const user of usersWithGooglePlayToken) {
+                    if (payingByUid.has(user.uid)) continue;
+                    try {
+                        const result = await verifyGooglePlaySubscription(
+                            user.googlePlayPurchaseToken,
+                            user.googlePlayPackageName,
+                            {
+                                amount: user.subscriptionAmount,
+                                billingCycle: user.billingCycle,
+                                productId: user.productId,
+                            }
+                        );
+                        if (!result.paying) continue;
+                        addPaying(user.uid, 'android', result.status, result.monthlyAmount || 0, {
+                            googlePlayStatus: result.rawStatus || result.status,
+                            purchaseToken: result.purchaseToken,
+                            packageName: result.packageName,
+                            productId: result.productId,
+                            orderId: result.orderId,
+                            currentPeriodEnd: result.currentPeriodEnd,
+                            nextBillingDate: result.nextBillingDate,
+                        });
+                    } catch (error) {
+                        failed++;
+                        console.warn(`[admin/stats] Falha ao consultar Google Play uid=${user.uid}:`, error.response?.data || error.message);
+                    }
+                }
+                if (failed > 0) {
+                    providerErrors.push({
+                        provider: 'android',
+                        status: null,
+                        message: `${failed} assinatura${failed !== 1 ? 's' : ''} Google Play nao puderam ser verificadas.`,
+                    });
+                }
+            }
+        }
+
         let totalDays = 0;
         let totalMrr = 0;
+        let activePaidCount = 0;
+        let trialSubscribersCount = 0;
         let canceledStripeInMrrCount = 0;
         for (const [uid, info] of payingByUid) {
             const u = usersByUid.get(uid);
             if (!u) continue;
+            const isTrialing = String(info.status || '').toLowerCase() === 'trialing';
+            if (isTrialing) {
+                trialSubscribersCount++;
+                continue;
+            }
+
+            activePaidCount++;
             totalDays += u.activeDaysCount;
             totalMrr += info.monthlyAmount;
             if (info.provider === 'stripe' && (info.cancelAtPeriodEnd || info.cancelAt || info.canceledAt)) {
                 canceledStripeInMrrCount++;
             }
         }
-        const avgActiveDays = payingByUid.size > 0
-            ? totalDays / payingByUid.size
+        const avgActiveDays = activePaidCount > 0
+            ? totalDays / activePaidCount
             : 0;
 
         return res.status(200).json({
-            activeSubscribersCount: payingByUid.size,
+            activeSubscribersCount: activePaidCount,
+            trialSubscribersCount,
             mrr: Number(totalMrr.toFixed(2)),
             avgActiveDaysOfPaying: Number(avgActiveDays.toFixed(1)),
             totalUsers: usersByUid.size,
@@ -2501,6 +3262,7 @@ app.get('/api/admin/pluggy-sync', async (req, res) => {
                 accountName: data.name || 'Conta sem nome',
                 accountType: data.type || data.subtype || null,
                 institutionName: getInstitutionName(data),
+                institutionImageUrl: data.institution?.imageUrl || data.connector?.imageUrl || data.bankData?.imageUrl || null,
                 lastSync,
                 rawStatus,
                 errorMessage,
@@ -2533,7 +3295,7 @@ app.get('/api/admin/pluggy-sync', async (req, res) => {
                     name: userInfo.name,
                     email: userInfo.email,
                     itemId: account.itemId,
-                    bankNames: new Set([account.institutionName]),
+                    bankData: new Map([[account.institutionName, account.institutionImageUrl]]),
                     accountCount: 1,
                     lastSync: account.lastSync,
                     rawStatus: account.rawStatus,
@@ -2544,7 +3306,9 @@ app.get('/api/admin/pluggy-sync', async (req, res) => {
             }
 
             existing.accountCount += 1;
-            existing.bankNames.add(account.institutionName);
+            if (!existing.bankData.has(account.institutionName) || account.institutionImageUrl) {
+                existing.bankData.set(account.institutionName, account.institutionImageUrl);
+            }
             existing.sources.add(account.source);
             if (account.errorMessage) existing.errors.push(account.errorMessage);
             if (account.lastSync && (!existing.lastSync || account.lastSync > existing.lastSync)) {
@@ -2568,7 +3332,8 @@ app.get('/api/admin/pluggy-sync', async (req, res) => {
                 name: row.name,
                 email: row.email,
                 itemId: row.itemId,
-                banks: Array.from(row.bankNames).filter(Boolean),
+                banks: Array.from(row.bankData.keys()).filter(Boolean),
+                bankDataList: Array.from(row.bankData.entries()).map(([name, logo]) => ({ name, logo: logo || null })).filter(b => b.name),
                 accountCount: row.accountCount,
                 lastSync: row.lastSync,
                 status,
@@ -2748,18 +3513,30 @@ async function computeActivePayingUids() {
     const usersByUid = new Map();
     const usersByStripeCustomerId = new Map();
     const usersByAsaasCustomerId = new Map();
+    const usersWithAppleToken = [];
+    const usersWithGooglePlayToken = [];
 
     for (const doc of usersSnap.docs) {
         const data = doc.data();
         const sub = data.subscription || {};
+        const appleOriginalTransactionId = getAppleOriginalTransactionId(data, sub);
+        const googlePlayPurchaseToken = getGooglePlayPurchaseToken(data, sub);
         const user = {
             uid: doc.id,
             stripeCustomerId: sub.stripeCustomerId || null,
             asaasCustomerId: sub.asaasCustomerId || null,
+            appleOriginalTransactionId,
+            googlePlayPurchaseToken,
+            googlePlayPackageName: getGooglePlayPackageName(data, sub),
+            subscriptionAmount: sub.nextAmount || sub.price || sub.amount || sub.value || data.planPrice || data.valor || null,
+            billingCycle: sub.billingCycle || sub.frequency || sub.interval || null,
+            productId: sub.productId || sub.appleProductId || sub.googlePlayProductId || sub.androidProductId || null,
         };
         usersByUid.set(doc.id, user);
         if (user.stripeCustomerId) usersByStripeCustomerId.set(user.stripeCustomerId, user);
         if (user.asaasCustomerId) usersByAsaasCustomerId.set(user.asaasCustomerId, user);
+        if (user.appleOriginalTransactionId) usersWithAppleToken.push(user);
+        if (user.googlePlayPurchaseToken) usersWithGooglePlayToken.push(user);
     }
 
     const payingUids = new Set();
@@ -2816,6 +3593,38 @@ async function computeActivePayingUids() {
         }
     }
 
+    for (const user of usersWithAppleToken) {
+        if (payingUids.has(user.uid)) continue;
+        try {
+            const result = await verifyAppleStoreSubscription(user.appleOriginalTransactionId, {
+                amount: user.subscriptionAmount,
+                billingCycle: user.billingCycle,
+                productId: user.productId,
+            });
+            if (result.paying) payingUids.add(user.uid);
+        } catch (error) {
+            console.warn(`[computeActivePayingUids] Falha ao consultar Apple uid=${user.uid}:`, error.response?.data || error.message);
+        }
+    }
+
+    for (const user of usersWithGooglePlayToken) {
+        if (payingUids.has(user.uid)) continue;
+        try {
+            const result = await verifyGooglePlaySubscription(
+                user.googlePlayPurchaseToken,
+                user.googlePlayPackageName,
+                {
+                    amount: user.subscriptionAmount,
+                    billingCycle: user.billingCycle,
+                    productId: user.productId,
+                }
+            );
+            if (result.paying) payingUids.add(user.uid);
+        } catch (error) {
+            console.warn(`[computeActivePayingUids] Falha ao consultar Google Play uid=${user.uid}:`, error.response?.data || error.message);
+        }
+    }
+
     return { payingUids, usersSnap };
 }
 
@@ -2850,7 +3659,120 @@ function preferStripeSubscriptionForSync(current, candidate) {
         : current;
 }
 
-function buildStripeAdminSubscriptionPayload(sub, customerId) {
+function buildStripeTrialHistoryFromSubscription(sub = {}) {
+    const status = String(sub?.status || '').toLowerCase();
+    const trialStartedAt = formatStripeDateIso(sub?.trial_start);
+    const trialEndsAt = formatStripeDateIso(sub?.trial_end);
+    const trialDays = sub?.trial_start && sub?.trial_end
+        ? Math.max(1, Math.round((Number(sub.trial_end) - Number(sub.trial_start)) / 86400))
+        : null;
+
+    if (!trialStartedAt && !trialEndsAt && !trialDays && status !== 'trialing') {
+        return null;
+    }
+
+    return {
+        trialStartedAt,
+        trialStartedDate: trialStartedAt ? trialStartedAt.split('T')[0] : null,
+        trialEndsAt,
+        trialEndsDate: trialEndsAt ? trialEndsAt.split('T')[0] : null,
+        trialDays,
+        trialStatus: status === 'trialing' ? 'trialing' : (trialEndsAt ? 'ended' : null),
+    };
+}
+
+function getStripeTrialSortTime(history = {}) {
+    const started = history?.trialStartedAt ? new Date(history.trialStartedAt).getTime() : 0;
+    const ended = history?.trialEndsAt ? new Date(history.trialEndsAt).getTime() : 0;
+    return started || ended || 0;
+}
+
+function pickStripeTrialHistory(subscriptions = []) {
+    const histories = subscriptions
+        .map(buildStripeTrialHistoryFromSubscription)
+        .filter(Boolean);
+
+    if (!histories.length) return {};
+
+    const activeTrial = histories.find((history) => history.trialStatus === 'trialing');
+    if (activeTrial) return activeTrial;
+
+    return histories
+        .slice()
+        .sort((a, b) => getStripeTrialSortTime(a) - getStripeTrialSortTime(b))[0] || {};
+}
+
+function isPaidStripeInvoice(invoice = {}) {
+    return Number(invoice?.amount_paid || 0) > 0 && (
+        invoice?.paid === true ||
+        String(invoice?.status || '').toLowerCase() === 'paid' ||
+        Boolean(invoice?.status_transitions?.paid_at)
+    );
+}
+
+function getStripeInvoicePaidAt(invoice = {}) {
+    if (!isPaidStripeInvoice(invoice)) return null;
+    return formatStripeDateIso(
+        invoice?.status_transitions?.paid_at ||
+        invoice?.effective_at ||
+        invoice?.created
+    );
+}
+
+function getStripeInvoicePaidSortTime(invoice = {}) {
+    return Number(
+        invoice?.status_transitions?.paid_at ||
+        invoice?.effective_at ||
+        invoice?.created ||
+        0
+    );
+}
+
+async function listStripeInvoicesForSubscription(subscriptionId) {
+    if (!subscriptionId) return [];
+
+    const invoices = [];
+    let hasMore = true;
+    let startingAfter = undefined;
+
+    while (hasMore) {
+        const params = { subscription: subscriptionId, limit: 100 };
+        if (startingAfter) params.starting_after = startingAfter;
+
+        const batch = await stripe.invoices.list(params);
+        invoices.push(...(batch.data || []));
+        hasMore = Boolean(batch.has_more);
+        if (hasMore && batch.data?.length) {
+            startingAfter = batch.data[batch.data.length - 1].id;
+        }
+    }
+
+    return invoices;
+}
+
+async function buildStripeHistoricalBackfill(subscriptions = []) {
+    const invoices = [];
+    for (const sub of subscriptions) {
+        const subscriptionInvoices = await listStripeInvoicesForSubscription(sub?.id);
+        invoices.push(...subscriptionInvoices);
+    }
+
+    const firstPaidInvoice = invoices
+        .filter(isPaidStripeInvoice)
+        .sort((a, b) => getStripeInvoicePaidSortTime(a) - getStripeInvoicePaidSortTime(b))[0] || null;
+
+    return {
+        ...pickStripeTrialHistory(subscriptions),
+        firstPaidAt: getStripeInvoicePaidAt(firstPaidInvoice),
+        invoicesScanned: invoices.length,
+    };
+}
+
+function pickExistingOrInferredIso(existingValue, inferredValue) {
+    return normalizeStoredDate(existingValue) || normalizeStoredDate(inferredValue);
+}
+
+function buildStripeAdminSubscriptionPayload(sub, customerId, existingSubscription = {}, history = {}) {
     const status = String(sub?.status || 'unknown').toLowerCase();
     const item = sub?.items?.data?.[0] || null;
     const price = item?.price || null;
@@ -2861,10 +3783,21 @@ function buildStripeAdminSubscriptionPayload(sub, customerId) {
     const cancellation = buildStripeCancellationFields(sub);
     const isCurrentlyActive = ['active', 'trialing'].includes(status);
 
+    const firstPaidAt = pickExistingOrInferredIso(existingSubscription?.firstPaidAt || existingSubscription?.firstPaidDate, history?.firstPaidAt);
+    const convertedToPaidAt = pickExistingOrInferredIso(existingSubscription?.convertedToPaidAt || existingSubscription?.convertedToPaidDate, firstPaidAt);
+    const trialStartedAt = pickExistingOrInferredIso(existingSubscription?.trialStartedAt || existingSubscription?.trialStartedDate || existingSubscription?.trialStart, history?.trialStartedAt);
+    const trialEndsAt = pickExistingOrInferredIso(existingSubscription?.trialEndsAt || existingSubscription?.trialEndsDate || existingSubscription?.trialEnd, history?.trialEndsAt);
+    const trialDays = Number(existingSubscription?.trialDays || history?.trialDays || 0) || null;
+    const trialStatus = status === 'trialing'
+        ? 'trialing'
+        : (convertedToPaidAt ? 'converted' : (history?.trialStatus || existingSubscription?.trialStatus || (trialEndsAt ? 'ended' : null)));
+
     const subscription = {
+        ...existingSubscription,
         plan: isCurrentlyActive ? 'pro' : 'free',
         status,
         provider: 'stripe',
+        stripeStatus: status,
         stripeCustomerId: customerId,
         stripeSubscriptionId: isCurrentlyActive ? sub.id : null,
         lastStripeSubscriptionId: sub.id,
@@ -2875,6 +3808,27 @@ function buildStripeAdminSubscriptionPayload(sub, customerId) {
         autoRenew: isCurrentlyActive && !sub?.cancel_at_period_end,
         ...cancellation,
     };
+
+    if (trialDays) subscription.trialDays = trialDays;
+    if (trialStartedAt) {
+        subscription.trialStartedAt = trialStartedAt;
+        subscription.trialStartedDate = trialStartedAt.split('T')[0];
+    }
+    if (trialEndsAt) {
+        subscription.trialEndsAt = trialEndsAt;
+        subscription.trialEndsDate = trialEndsAt.split('T')[0];
+    }
+    if (trialStatus) {
+        subscription.trialStatus = trialStatus;
+    }
+    if (firstPaidAt) {
+        subscription.firstPaidAt = firstPaidAt;
+        subscription.firstPaidDate = firstPaidAt.split('T')[0];
+    }
+    if (convertedToPaidAt) {
+        subscription.convertedToPaidAt = convertedToPaidAt;
+        subscription.convertedToPaidDate = convertedToPaidAt.split('T')[0];
+    }
 
     if (priceDisplay) {
         subscription.price = priceDisplay;
@@ -2990,7 +3944,7 @@ app.post('/api/admin/downgrade-non-paying', async (req, res) => {
 
 /**
  * POST /api/admin/stripe/sync-users
- * Puxa todos os clientes/assinaturas do Stripe e sincroniza com o Firestore.
+ * Puxa assinaturas e invoices historicas do Stripe e sincroniza com o Firestore.
  */
 app.post('/api/admin/stripe/sync-users', async (req, res) => {
     const authResult = await verifyFirebaseRequest(req);
@@ -3013,6 +3967,7 @@ app.post('/api/admin/stripe/sync-users', async (req, res) => {
         let hasMore = true;
         let startingAfter = undefined;
         const subscriptionsByUid = new Map();
+        const uidByCustomerId = new Map();
 
         while (hasMore) {
             const params = { limit: 100, status: 'all', expand: ['data.customer'] };
@@ -3033,11 +3988,16 @@ app.post('/api/admin/stripe/sync-users', async (req, res) => {
 
                     // Fallback: busca no Firestore pelo stripeCustomerId
                     if (!uid && customerId) {
-                        const snap = await db.collection('users')
-                            .where('subscription.stripeCustomerId', '==', customerId)
-                            .limit(1)
-                            .get();
-                        if (!snap.empty) uid = snap.docs[0].id;
+                        if (uidByCustomerId.has(customerId)) {
+                            uid = uidByCustomerId.get(customerId);
+                        } else {
+                            const snap = await db.collection('users')
+                                .where('subscription.stripeCustomerId', '==', customerId)
+                                .limit(1)
+                                .get();
+                            uid = snap.empty ? null : snap.docs[0].id;
+                            uidByCustomerId.set(customerId, uid);
+                        }
                     }
 
                     if (!uid) {
@@ -3045,8 +4005,16 @@ app.post('/api/admin/stripe/sync-users', async (req, res) => {
                         continue;
                     }
 
-                    const current = subscriptionsByUid.get(uid);
-                    subscriptionsByUid.set(uid, preferStripeSubscriptionForSync(current, { uid, customerId, sub }));
+                    const current = subscriptionsByUid.get(uid) || {
+                        uid,
+                        customerId,
+                        primary: null,
+                        subscriptions: [],
+                    };
+                    current.customerId = current.customerId || customerId;
+                    current.subscriptions.push(sub);
+                    current.primary = preferStripeSubscriptionForSync(current.primary, { uid, customerId, sub });
+                    subscriptionsByUid.set(uid, current);
                 } catch (subErr) {
                     console.error('[stripe/sync-users] erro em sub:', subErr.message);
                     errors++;
@@ -3059,10 +4027,29 @@ app.post('/api/admin/stripe/sync-users', async (req, res) => {
             }
         }
 
-        for (const { uid, customerId, sub } of subscriptionsByUid.values()) {
+        let invoicesScanned = 0;
+        let paidBackfilled = 0;
+        let trialBackfilled = 0;
+
+        for (const { uid, customerId, primary, subscriptions } of subscriptionsByUid.values()) {
             try {
+                const sub = primary?.sub;
+                if (!sub) continue;
+
+                const history = await buildStripeHistoricalBackfill(subscriptions);
+                invoicesScanned += history.invoicesScanned || 0;
+
+                const userRef = db.collection('users').doc(uid);
+                const userDoc = await userRef.get();
+                const existingSubscription = userDoc.exists ? (userDoc.data()?.subscription || {}) : {};
+                if (!existingSubscription.firstPaidAt && history.firstPaidAt) paidBackfilled++;
+                if ((!existingSubscription.trialStartedAt || !existingSubscription.trialEndsAt || !existingSubscription.trialDays) &&
+                    (history.trialStartedAt || history.trialEndsAt || history.trialDays)) {
+                    trialBackfilled++;
+                }
+
                 await db.collection('users').doc(uid).set({
-                    subscription: buildStripeAdminSubscriptionPayload(sub, customerId),
+                    subscription: buildStripeAdminSubscriptionPayload(sub, customerId, existingSubscription, history),
                     updatedAt: new Date().toISOString(),
                 }, { merge: true });
                 synced++;
@@ -3072,8 +4059,8 @@ app.post('/api/admin/stripe/sync-users', async (req, res) => {
             }
         }
 
-        console.log(`✅ [stripe/sync-users] synced=${synced} notFound=${notFound} errors=${errors}`);
-        return res.status(200).json({ success: true, synced, notFound, errors });
+        console.log(`✅ [stripe/sync-users] synced=${synced} invoicesScanned=${invoicesScanned} paidBackfilled=${paidBackfilled} trialBackfilled=${trialBackfilled} notFound=${notFound} errors=${errors}`);
+        return res.status(200).json({ success: true, synced, invoicesScanned, paidBackfilled, trialBackfilled, notFound, errors });
     } catch (error) {
         console.error('❌ [stripe/sync-users]', error.message);
         return res.status(500).json({ error: error.message || 'Erro ao sincronizar do Stripe.' });
@@ -3191,6 +4178,11 @@ async function triggerRemarketing(uid, userData, day) {
  * Escaneia o banco em busca de carrinhos abandonados prontos para remarketing
  */
 async function processRemarketingQueue() {
+    if (!db) {
+        console.warn('[AUTO-REMARKETING] Firestore indisponivel. Escaneamento ignorado.');
+        return;
+    }
+
     console.log('🔍 [AUTO-REMARKETING] Escaneando carrinhos abandonados...');
     try {
         const usersSnap = await db.collection('users').get();
@@ -3238,6 +4230,11 @@ async function processRemarketingQueue() {
 
 // Iniciar o cron se estivermos em modo produção ou se desejado
 function startRemarketingCron() {
+    if (!db) {
+        console.warn('Sistema de Remarketing Automatico desativado: Firestore indisponivel.');
+        return;
+    }
+
     console.log('🚀 Sistema de Remarketing Automático Ativado.');
     // Executa uma vez ao iniciar (com delay de 10s para estabilizar servidor)
     setTimeout(processRemarketingQueue, 10000);

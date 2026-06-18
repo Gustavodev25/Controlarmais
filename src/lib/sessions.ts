@@ -26,6 +26,7 @@ export async function trackSession(uid: string) {
     const deviceId = getDeviceId();
     const ua = navigator.userAgent;
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+    const signupPlatform = getDevicePlatform(ua);
 
     let ip = 'IP Protegido';
     try {
@@ -43,6 +44,7 @@ export async function trackSession(uid: string) {
         userAgent: ua,
         deviceType: isMobile ? 'mobile' : 'pc',
         deviceName: getDeviceName(ua),
+        signupPlatform,
         lastSeen: serverTimestamp(),
     };
 
@@ -55,6 +57,13 @@ export async function trackSession(uid: string) {
 
     const userActivityData: Record<string, any> = {
         lastLogin: serverTimestamp(),
+        lastDevice: {
+            deviceName: sessionData.deviceName,
+            deviceType: sessionData.deviceType,
+            signupPlatform: sessionData.signupPlatform,
+            userAgent: sessionData.userAgent,
+            capturedAt: serverTimestamp(),
+        },
     };
 
     if (lastActivityDate !== today) {
@@ -63,6 +72,13 @@ export async function trackSession(uid: string) {
     }
 
     await setDoc(doc(db, 'users', uid), userActivityData, { merge: true });
+}
+
+function getDevicePlatform(ua: string): 'android' | 'iphone' | 'mobile' | 'desktop' {
+    if (ua.includes('Android')) return 'android';
+    if (/iPhone|iPad|iPod/i.test(ua)) return 'iphone';
+    if (/webOS|BlackBerry|IEMobile|Opera Mini|Mobile|Mobi/i.test(ua)) return 'mobile';
+    return 'desktop';
 }
 
 function getDeviceName(ua: string): string {

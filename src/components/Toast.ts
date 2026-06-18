@@ -4,6 +4,7 @@ export interface ToastOptions {
     title: string;
     description?: string;
     type?: ToastType;
+    duration?: number;
 }
 
 interface Toast extends ToastOptions {
@@ -159,5 +160,5 @@ function addToast(options: ToastOptions) {
                 }
             }, 1000);
         }
-    }, 4000);
+    }, options.duration ?? 4000);
 }

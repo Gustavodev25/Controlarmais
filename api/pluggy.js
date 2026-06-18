@@ -1,11 +1,9 @@
+import '../loadEnv.js';
 import express from 'express';
 import fetch from 'node-fetch';
 import { z } from 'zod';
 import admin from 'firebase-admin';
-import dotenv from 'dotenv';
 import { createHash } from 'node:crypto';
-
-dotenv.config();
 
 const router = express.Router();
 const sseClients = new Set();

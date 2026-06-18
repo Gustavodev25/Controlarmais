@@ -1,3 +1,4 @@
+import '../loadEnv.js';
 import express from 'express';
 import Anthropic from '@anthropic-ai/sdk';
 import admin from 'firebase-admin';

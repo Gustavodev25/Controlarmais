@@ -1,3 +1,4 @@
+import '../loadEnv.js';
 import express from 'express';
 import Stripe from 'stripe';
 import admin from 'firebase-admin';
@@ -39,6 +40,10 @@ const SYNC_CREDIT_COMBOS = Object.freeze([
 
 const LANDING_LAUNCH_PROMO_CODE = 'LANCAMENTO50';
 const LANDING_LAUNCH_COUPON_ID = 'zQlO4Xkc';
+const configuredTrialDays = Number.parseInt(process.env.STRIPE_PRO_TRIAL_DAYS || '7', 10);
+const STRIPE_PRO_TRIAL_DAYS = Number.isFinite(configuredTrialDays) && configuredTrialDays >= 0
+    ? configuredTrialDays
+    : 7;
 
 const STRIPE_ACTIVE_SUBSCRIPTION_STATUSES = new Set([
     'active',
@@ -198,7 +203,9 @@ function formatDateIso(value) {
 
     const date = value instanceof Date
         ? value
-        : new Date(typeof value === 'number' ? value * 1000 : value);
+        : typeof value?.toDate === 'function'
+            ? value.toDate()
+            : new Date(typeof value === 'number' ? value * 1000 : value);
 
     if (Number.isNaN(date.getTime())) return null;
     return date.toISOString();
@@ -207,6 +214,40 @@ function formatDateIso(value) {
 function formatDateOnly(value) {
     const isoDate = formatDateIso(value);
     return isoDate ? isoDate.split('T')[0] : null;
+}
+
+function getPaidInvoiceDate(invoice, fallbackDate = null) {
+    if (!invoice || Number(invoice.amount_paid || 0) <= 0) return null;
+    return formatDateIso(invoice.created) || fallbackDate;
+}
+
+function buildStripeTrialPayload(subscription = {}) {
+    const stripeStatus = String(subscription?.status || '').toLowerCase() || null;
+    const trialStartedAt = formatDateIso(subscription?.trial_start);
+    const trialEndsAt = formatDateIso(subscription?.trial_end);
+    const trialDays = trialStartedAt && trialEndsAt
+        ? Math.max(1, Math.round((new Date(trialEndsAt).getTime() - new Date(trialStartedAt).getTime()) / 86400000))
+        : (STRIPE_PRO_TRIAL_DAYS > 0 ? STRIPE_PRO_TRIAL_DAYS : null);
+    const trialStatus = stripeStatus === 'trialing'
+        ? 'trialing'
+        : (trialEndsAt ? 'ended' : null);
+
+    const payload = {
+        'subscription.stripeStatus': stripeStatus,
+        'subscription.trialStatus': trialStatus,
+    };
+
+    if (trialDays) payload['subscription.trialDays'] = trialDays;
+    if (trialStartedAt) {
+        payload['subscription.trialStartedAt'] = trialStartedAt;
+        payload['subscription.trialStartedDate'] = trialStartedAt.split('T')[0];
+    }
+    if (trialEndsAt) {
+        payload['subscription.trialEndsAt'] = trialEndsAt;
+        payload['subscription.trialEndsDate'] = trialEndsAt.split('T')[0];
+    }
+
+    return payload;
 }
 
 function buildStripeCancellationPayload(subscription = {}) {
@@ -523,6 +564,9 @@ async function applyActiveStripeSubscription({
     const interval = price?.recurring?.interval || 'month';
     const priceDisplay = formatAmountDisplayFromCents(amountInCents);
     const userStatus = mapStripeSubscriptionStatusToUserStatus(subscription?.status || 'active');
+    const existingData = await getUserData(uid).catch(() => null);
+    const existingSubscription = existingData?.subscription || {};
+    const firstPaidAt = getPaidInvoiceDate(invoice, now);
 
     const updatePayload = {
         'subscription.provider': 'stripe',
@@ -536,10 +580,21 @@ async function applyActiveStripeSubscription({
         'subscription.cancelAtPeriodEnd': Boolean(subscription?.cancel_at_period_end),
         'subscription.autoRenew': !subscription?.cancel_at_period_end,
         ...buildStripeCancellationPayload(subscription),
+        ...buildStripeTrialPayload(subscription),
         'subscription.billingCycle': interval === 'year' ? 'annual' : 'mensal',
         'subscription.startDate': formatDateOnly(subscription?.start_date),
         updatedAt: now,
     };
+
+    if (firstPaidAt) {
+        const paidAt = formatDateIso(existingSubscription.firstPaidAt) || firstPaidAt;
+        const convertedAt = formatDateIso(existingSubscription.convertedToPaidAt) || paidAt;
+        updatePayload['subscription.firstPaidAt'] = paidAt;
+        updatePayload['subscription.firstPaidDate'] = paidAt.split('T')[0];
+        updatePayload['subscription.convertedToPaidAt'] = convertedAt;
+        updatePayload['subscription.convertedToPaidDate'] = convertedAt.split('T')[0];
+        updatePayload['subscription.trialStatus'] = 'converted';
+    }
 
     console.log('[applyActiveStripeSubscription] Salvando payload:', {
         currentPeriodEnd,
@@ -771,10 +826,10 @@ async function handleInvoicePaid(invoicePayload) {
                 value: amount,
                 document: userData.cpf || userData.profile?.cpf
             });
+
+            // Enviar email de boas-vindas se for o primeiro pagamento real.
+            await checkAndSendWelcomeEmail(uid, userData);
         }
-        
-        // Enviar email de boas-vindas se for o primeiro pagamento
-        await checkAndSendWelcomeEmail(uid, userData);
     } catch (err) {
         console.error('[Utmify] Erro ao buscar dados do usuario para postback:', err.message);
     }
@@ -832,6 +887,7 @@ async function handleInvoicePaymentFailed(invoicePayload) {
         'subscription.cancelAtPeriodEnd': Boolean(subscription?.cancel_at_period_end),
         'subscription.autoRenew': !subscription?.cancel_at_period_end,
         ...buildStripeCancellationPayload(subscription),
+        ...buildStripeTrialPayload(subscription),
         updatedAt: new Date().toISOString(),
         ...(paymentMethodSnapshot?.brand ? {
             'subscription.creditCardBrand': paymentMethodSnapshot.brand,
@@ -895,6 +951,7 @@ async function handleSubscriptionUpdated(subscriptionPayload) {
         'subscription.cancelAtPeriodEnd': Boolean(subscription.cancel_at_period_end),
         'subscription.autoRenew': !subscription.cancel_at_period_end,
         ...buildStripeCancellationPayload(subscription),
+        ...buildStripeTrialPayload(subscription),
         updatedAt: new Date().toISOString(),
         ...(paymentMethodSnapshot?.brand ? {
             'subscription.creditCardBrand': paymentMethodSnapshot.brand,
@@ -1004,12 +1061,15 @@ router.post('/checkout/subscription-session', async (req, res) => {
                 kind: 'subscription',
                 firebaseUID: authResult.uid,
                 plan: 'pro',
+                trialDays: String(STRIPE_PRO_TRIAL_DAYS),
             },
             subscription_data: {
+                ...(STRIPE_PRO_TRIAL_DAYS > 0 ? { trial_period_days: STRIPE_PRO_TRIAL_DAYS } : {}),
                 metadata: {
                     kind: 'subscription',
                     firebaseUID: authResult.uid,
                     plan: 'pro',
+                    trialDays: String(STRIPE_PRO_TRIAL_DAYS),
                 },
             },
             billing_address_collection: 'auto',
@@ -1055,6 +1115,9 @@ router.post('/checkout/subscription-session', async (req, res) => {
             'subscription.stripeCustomerId': customer.id,
             'subscription.stripePriceId': priceId,
             'subscription.pendingCheckoutSessionId': session.id,
+            'subscription.trialDays': STRIPE_PRO_TRIAL_DAYS,
+            'subscription.trialStatus': STRIPE_PRO_TRIAL_DAYS > 0 ? 'pending' : null,
+            'subscription.trialOfferedAt': new Date().toISOString(),
             updatedAt: new Date().toISOString(),
         });
 
@@ -1213,7 +1276,7 @@ router.get('/checkout/session-status/:sessionId', async (req, res) => {
 
         const kind = session.metadata?.kind || session.mode || 'unknown';
 
-        if (kind === 'subscription' && session.payment_status === 'paid') {
+        if (kind === 'subscription' && session.subscription) {
             await syncStripeSubscriptionFromSession(session);
         }
 
@@ -1315,6 +1378,10 @@ router.post('/sync-subscription', async (req, res) => {
         const interval = price?.recurring?.interval || 'month';
         const priceDisplay = formatAmountDisplayFromCents(amountInCents);
         const userStatus = mapStripeSubscriptionStatusToUserStatus(fullSubscription.status);
+        const firstPaidInvoice = allInvoices
+            .filter((inv) => Number(inv.amount_paid || 0) > 0)
+            .sort((a, b) => Number(a.created || 0) - Number(b.created || 0))[0] || null;
+        const inferredFirstPaidAt = getPaidInvoiceDate(firstPaidInvoice, now);
 
         const updatePayload = {
             'subscription.provider': 'stripe',
@@ -1328,10 +1395,21 @@ router.post('/sync-subscription', async (req, res) => {
             'subscription.cancelAtPeriodEnd': Boolean(fullSubscription.cancel_at_period_end),
             'subscription.autoRenew': !fullSubscription.cancel_at_period_end,
             ...buildStripeCancellationPayload(fullSubscription),
+            ...buildStripeTrialPayload(fullSubscription),
             'subscription.billingCycle': interval === 'year' ? 'annual' : 'mensal',
             'subscription.startDate': formatDateOnly(fullSubscription.start_date),
             updatedAt: now,
         };
+
+        if (inferredFirstPaidAt) {
+            const paidAt = formatDateIso(userData?.subscription?.firstPaidAt) || inferredFirstPaidAt;
+            const convertedAt = formatDateIso(userData?.subscription?.convertedToPaidAt) || paidAt;
+            updatePayload['subscription.firstPaidAt'] = paidAt;
+            updatePayload['subscription.firstPaidDate'] = paidAt.split('T')[0];
+            updatePayload['subscription.convertedToPaidAt'] = convertedAt;
+            updatePayload['subscription.convertedToPaidDate'] = convertedAt.split('T')[0];
+            updatePayload['subscription.trialStatus'] = 'converted';
+        }
 
         if (priceDisplay) {
             updatePayload['subscription.price'] = priceDisplay;

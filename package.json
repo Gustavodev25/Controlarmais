@@ -4,7 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --host 0.0.0.0",
+    "dev": "node scripts/dev.mjs",
+    "dev:vite": "vite --host 0.0.0.0",
+    "dev:api": "node server.js",
     "start": "node server.js",
     "server": "node server.js",
     "build": "tsc && vite build",
@@ -46,6 +48,7 @@
     "react-dom": "^19.2.4",
     "recharts": "^3.8.0",
     "stripe": "^20.4.1",
+    "xlsx": "^0.18.5",
     "zod": "^4.3.6"
   }
 }

@@ -28,6 +28,30 @@ interface AuthState {
   };
 }
 
+function getSignupDeviceInfo() {
+  const userAgent = navigator.userAgent || '';
+  const browserPlatform = navigator.platform || '';
+  const hasTouchMac = /Macintosh/i.test(userAgent) && navigator.maxTouchPoints > 1;
+  const isAndroid = /Android/i.test(userAgent);
+  const isIos = /iPhone|iPad|iPod/i.test(userAgent) || hasTouchMac;
+  const isMobile = isAndroid || isIos || /Mobile|Mobi/i.test(userAgent);
+  const signupPlatform = isAndroid
+    ? 'android'
+    : isIos
+      ? 'iphone'
+      : isMobile
+        ? 'mobile'
+        : 'desktop';
+
+  return {
+    createdFromMobile: isMobile,
+    signupSource: isMobile ? 'mobile' : 'desktop',
+    signupPlatform,
+    userAgent,
+    browserPlatform,
+  };
+}
+
 class AuthManager {
   private state: AuthState = {
     isLogin: true,
@@ -318,6 +342,7 @@ class AuthManager {
         await updateProfile(userCredential.user, { displayName: signupData.name });
 
         const now = new Date().toISOString();
+        const signupDevice = getSignupDeviceInfo();
         await setDoc(doc(db, 'users', userCredential.user.uid), {
           id: userCredential.user.uid,
           uid: userCredential.user.uid,
@@ -326,8 +351,19 @@ class AuthManager {
           phone: null,
           createdAt: now,
           updatedAt: now,
+          createdFromMobile: signupDevice.createdFromMobile,
+          signupSource: signupDevice.signupSource,
+          signupPlatform: signupDevice.signupPlatform,
           isAdmin: false,
           extraSyncCredits: 0,
+          device: {
+            createdFromMobile: signupDevice.createdFromMobile,
+            signupSource: signupDevice.signupSource,
+            signupPlatform: signupDevice.signupPlatform,
+            userAgent: signupDevice.userAgent,
+            browserPlatform: signupDevice.browserPlatform,
+            capturedAt: now,
+          },
           profile: {
             id: userCredential.user.uid,
             name: signupData.name,

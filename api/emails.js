@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import '../loadEnv.js';
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const EMAIL_FROM = process.env.EMAIL_FROM || 'Controlar+ <onboarding@resend.dev>';

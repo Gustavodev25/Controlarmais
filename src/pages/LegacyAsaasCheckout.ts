@@ -8,6 +8,30 @@ import { renderDashboard } from './Dashboard';
 import { signOut, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { authManager } from './Auth';
 
+function getCheckoutDeviceInfo() {
+  const userAgent = navigator.userAgent || '';
+  const browserPlatform = navigator.platform || '';
+  const hasTouchMac = /Macintosh/i.test(userAgent) && navigator.maxTouchPoints > 1;
+  const isAndroid = /Android/i.test(userAgent);
+  const isIos = /iPhone|iPad|iPod/i.test(userAgent) || hasTouchMac;
+  const isMobile = isAndroid || isIos || /Mobile|Mobi/i.test(userAgent);
+  const signupPlatform = isAndroid
+    ? 'android'
+    : isIos
+      ? 'iphone'
+      : isMobile
+        ? 'mobile'
+        : 'desktop';
+
+  return {
+    createdFromMobile: isMobile,
+    signupSource: isMobile ? 'mobile' : 'desktop',
+    signupPlatform,
+    userAgent,
+    browserPlatform,
+  };
+}
+
 export function renderLegacyAsaasCheckout(userData: any) {
   // Se já tem assinatura ativa no Asaas, vai direto pro dashboard
   const alreadyActive = userData?.subscription?.status === 'active' && (
@@ -714,6 +738,7 @@ function attachCheckoutListeners(userData: any) {
       console.log("[Checkout] Asaas creditCardToken recebido:", cardToken ? `${cardToken.substring(0, 8)}...` : 'NENHUM');
 
       const now = new Date().toISOString();
+      const signupDevice = getCheckoutDeviceInfo();
       const baseDoc = {
         id: userCredential.user.uid,
         uid: userCredential.user.uid,
@@ -721,7 +746,18 @@ function attachCheckoutListeners(userData: any) {
         email: userData.email,
         createdAt: now,
         updatedAt: now,
+        createdFromMobile: signupDevice.createdFromMobile,
+        signupSource: signupDevice.signupSource,
+        signupPlatform: signupDevice.signupPlatform,
         isAdmin: false,
+        device: {
+          createdFromMobile: signupDevice.createdFromMobile,
+          signupSource: signupDevice.signupSource,
+          signupPlatform: signupDevice.signupPlatform,
+          userAgent: signupDevice.userAgent,
+          browserPlatform: signupDevice.browserPlatform,
+          capturedAt: now,
+        },
         profile: {
           id: userCredential.user.uid,
           name: userData.name,

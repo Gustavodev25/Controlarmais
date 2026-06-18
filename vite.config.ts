@@ -1,6 +1,9 @@
 import { defineConfig, type ViteDevServer } from 'vite'
 import tailwindcss from '@tailwindcss/vite'
 
+const backendPort = process.env.BACKEND_PORT || process.env.PORT || '3000'
+const backendTarget = `http://127.0.0.1:${backendPort}`
+
 function fullReloadAlways() {
   return {
     name: 'full-reload-always',
@@ -26,16 +29,26 @@ export default defineConfig({
     allowedHosts: [
       'localhost',
       '127.0.0.1',
-      'breanna-fractious-eely.ngrok-free.dev',
-      'angelina-unsalvageable-inconceivably.ngrok-free.dev',
-      'toney-nonreversing-cedrick.ngrok-free.dev',
-      'burseraceous-adalynn-academically.ngrok-free.dev',
+      '.ngrok-free.dev',
     ],
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:3000',
+        target: backendTarget,
         changeOrigin: true,
         secure: false,
+        configure(proxy) {
+          proxy.on('error', (error, _req, res) => {
+            const message = error?.message || 'Backend local indisponivel'
+            console.warn(`[vite proxy] API indisponivel em ${backendTarget}: ${message}`)
+
+            if (!res || res.headersSent || typeof res.writeHead !== 'function') return
+            res.writeHead(503, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({
+              error: 'API local indisponivel. Inicie o backend com npm run dev ou npm run server.',
+              details: message,
+            }))
+          })
+        },
       }
     }
   }

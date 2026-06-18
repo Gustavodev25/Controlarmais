@@ -14,9 +14,13 @@ import { GenericDropdown, attachGenericDropdownListeners } from '../components/G
 
 const verifiedIconStripe = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="#6faf6e" class="shrink-0" title="Stripe: Assinatura Verificada e Ativa"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12.01 2.011a3.2 3.2 0 0 1 2.113 .797l.154 .145l.698 .698a1.2 1.2 0 0 0 .71 .341l.135 .008h1a3.2 3.2 0 0 1 3.195 3.018l.005 .182v1c0 .27 .092 .533 .258 .743l.09 .1l.697 .698a3.2 3.2 0 0 1 .147 4.382l-.145 .154l-.698 .698a1.2 1.2 0 0 0 -.341 .71l-.008 .135v1a3.2 3.2 0 0 1 -3.018 3.195l-.182 .005h-1a1.2 1.2 0 0 0 -.743 .258l-.1 .09l-.698 .697a3.2 3.2 0 0 1 -4.382 .147l-.154 -.145l-.698 -.698a1.2 1.2 0 0 0 -.71 -.341l-.135 -.008h-1a3.2 3.2 0 0 1 -3.195 -3.018l-.005 -.182v-1a1.2 1.2 0 0 0 -.258 -.743l-.09 -.1l-.697 -.698a3.2 3.2 0 0 1 -.147 -4.382l.145 -.154l.698 -.698a1.2 1.2 0 0 0 .341 -.71l.008 -.135v-1l.005 -.182a3.2 3.2 0 0 1 3.013 -3.013l.182 -.005h1a1.2 1.2 0 0 0 .743 -.258l.1 -.09l.698 -.697a3.2 3.2 0 0 1 2.269 -.944zm3.697 7.282a1 1 0 0 0 -1.414 0l-3.293 3.292l-1.293 -1.292l-.094 -.083a1 1 0 0 0 -1.32 1.497l2 2l.094 .083a1 1 0 0 0 1.32 -.083l4 -4l.083 -.094a1 1 0 0 0 -.083 -1.32z" /></svg>`;
 const verifiedIconAsaas = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="#2869d2" class="shrink-0" title="Asaas: Assinatura Verificada e Ativa"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12.01 2.011a3.2 3.2 0 0 1 2.113 .797l.154 .145l.698 .698a1.2 1.2 0 0 0 .71 .341l.135 .008h1a3.2 3.2 0 0 1 3.195 3.018l.005 .182v1c0 .27 .092 .533 .258 .743l.09 .1l.697 .698a3.2 3.2 0 0 1 .147 4.382l-.145 .154l-.698 .698a1.2 1.2 0 0 0 -.341 .71l-.008 .135v1a3.2 3.2 0 0 1 -3.018 3.195l-.182 .005h-1a1.2 1.2 0 0 0 -.743 .258l-.1 .09l-.698 .697a3.2 3.2 0 0 1 -4.382 .147l-.154 -.145l-.698 -.698a1.2 1.2 0 0 0 -.71 -.341l-.135 -.008h-1a3.2 3.2 0 0 1 -3.195 -3.018l-.005 -.182v-1a1.2 1.2 0 0 0 -.258 -.743l-.09 -.1l-.697 -.698a3.2 3.2 0 0 1 -.147 -4.382l.145 -.154l.698 -.698a1.2 1.2 0 0 0 .341 -.71l.008 -.135v-1l.005 -.182a3.2 3.2 0 0 1 3.013 -3.013l.182 -.005h1a1.2 1.2 0 0 0 .743 -.258l.1 -.09l.698 -.697a3.2 3.2 0 0 1 2.269 -.944zm3.697 7.282a1 1 0 0 0 -1.414 0l-3.293 3.292l-1.293 -1.292l-.094 -.083a1 1 0 0 0 -1.32 1.497l2 2l.094 .083a1 1 0 0 0 1.32 -.083l4 -4l.083 -.094a1 1 0 0 0 -.083 -1.32z" /></svg>`;
+const verifiedIconApple = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="#94a3b8" class="shrink-0" title="Apple IAP: Assinatura Verificada e Ativa"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12.01 2.011a3.2 3.2 0 0 1 2.113 .797l.154 .145l.698 .698a1.2 1.2 0 0 0 .71 .341l.135 .008h1a3.2 3.2 0 0 1 3.195 3.018l.005 .182v1c0 .27 .092 .533 .258 .743l.09 .1l.697 .698a3.2 3.2 0 0 1 .147 4.382l-.145 .154l-.698 .698a1.2 1.2 0 0 0 -.341 .71l-.008 .135v1a3.2 3.2 0 0 1 -3.018 3.195l-.182 .005h-1a1.2 1.2 0 0 0 -.743 .258l-.1 .09l-.698 .697a3.2 3.2 0 0 1 -4.382 .147l-.154 -.145l-.698 -.698a1.2 1.2 0 0 0 -.71 -.341l-.135 -.008h-1a3.2 3.2 0 0 1 -3.195 -3.018l-.005 -.182v-1a1.2 1.2 0 0 0 -.258 -.743l-.09 -.1l-.697-.698a3.2 3.2 0 0 1-.147-4.382l.145-.154l.698-.698a1.2 1.2 0 0 0 .341-.71l.008-.135v-1l.005-.182a3.2 3.2 0 0 1 3.013-3.013l.182-.005h1a1.2 1.2 0 0 0 .743-.258l.1-.09l.698-.697a3.2 3.2 0 0 1 2.269-.944zm3.697 7.282a1 1 0 0 0-1.414 0l-3.293 3.292l-1.293-1.292l-.094-.083a1 1 0 0 0-1.32 1.497l2 2l.094.083a1 1 0 0 0 1.32-.083l4-4l.083-.094a1 1 0 0 0-.083-1.32z"/></svg>`;
+const verifiedIconAndroid = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="#22c55e" class="shrink-0" title="Google Play: Assinatura Verificada e Ativa"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12.01 2.011a3.2 3.2 0 0 1 2.113 .797l.154 .145l.698 .698a1.2 1.2 0 0 0 .71 .341l.135 .008h1a3.2 3.2 0 0 1 3.195 3.018l.005 .182v1c0 .27 .092 .533 .258 .743l.09 .1l.697 .698a3.2 3.2 0 0 1 .147 4.382l-.145 .154l-.698 .698a1.2 1.2 0 0 0 -.341 .71l-.008 .135v1a3.2 3.2 0 0 1 -3.018 3.195l-.182 .005h-1a1.2 1.2 0 0 0 -.743 .258l-.1 .09l-.698 .697a3.2 3.2 0 0 1 -4.382 .147l-.154 -.145l-.698 -.698a1.2 1.2 0 0 0 -.71 -.341l-.135 -.008h-1a3.2 3.2 0 0 1 -3.195 -3.018l-.005 -.182v-1a1.2 1.2 0 0 0 -.258 -.743l-.09 -.1l-.697-.698a3.2 3.2 0 0 1-.147-4.382l.145-.154l.698-.698a1.2 1.2 0 0 0 .341-.71l.008-.135v-1l.005-.182a3.2 3.2 0 0 1 3.013-3.013l.182-.005h1a1.2 1.2 0 0 0 .743-.258l.1-.09l.698-.697a3.2 3.2 0 0 1 2.269-.944zm3.697 7.282a1 1 0 0 0-1.414 0l-3.293 3.292l-1.293-1.292l-.094-.083a1 1 0 0 0-1.32 1.497l2 2l.094.083a1 1 0 0 0 1.32-.083l4-4l.083-.094a1 1 0 0 0-.083-1.32z"/></svg>`;
 const loaderIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" title="Verificando assinatura..."><style>@keyframes spinner_qM83{0%{stroke-dasharray:0 150;stroke-dashoffset:0}47.5%{stroke-dasharray:42 150;stroke-dashoffset:-16}95%,100%{stroke-dasharray:42 150;stroke-dashoffset:-59}}@keyframes spinner_8Q3b{100%{transform:rotate(360deg)}}.spi{transform-origin:center;animation:spinner_8Q3b 2s linear infinite}.spi circle{stroke-linecap:round;animation:spinner_qM83 1.5s ease-in-out infinite}</style><g class="spi"><circle cx="12" cy="12" r="9.5" fill="none" /></g></svg>`;
 const warningIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" title="Verificacao indisponivel"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>`;
 const moneyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+const decimalFormatter = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const percentFormatter = new Intl.NumberFormat('pt-BR', { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 type ProviderError = {
   provider: string;
@@ -34,12 +38,25 @@ function providerName(provider: string): string {
   const normalized = normalizeValue(provider);
   if (normalized === 'asaas') return 'Asaas';
   if (normalized === 'stripe') return 'Stripe';
+  if (['apple', 'app_store', 'appstore', 'ios', 'iphone', 'storekit'].includes(normalized)) return 'Apple IAP';
+  if (['android', 'google_play', 'googleplay', 'play_store', 'playstore', 'google'].includes(normalized)) return 'Google Play';
   return provider || 'provedor';
 }
 
-function hasProviderError(errors: ProviderError[], provider: string): boolean {
+function normalizeProviderKey(provider: any): string {
   const normalized = normalizeValue(provider);
-  return Boolean(normalized && errors.some((error) => normalizeValue(error.provider) === normalized));
+  if (['apple', 'app_store', 'appstore', 'ios', 'iphone', 'storekit'].includes(normalized)) return 'apple';
+  if (['android', 'google_play', 'googleplay', 'play_store', 'playstore', 'google'].includes(normalized)) return 'android';
+  return normalized;
+}
+
+function isVerifiableProvider(provider: any): boolean {
+  return ['stripe', 'asaas', 'apple', 'android'].includes(normalizeProviderKey(provider));
+}
+
+function hasProviderError(errors: ProviderError[], provider: string): boolean {
+  const normalized = normalizeProviderKey(provider);
+  return Boolean(normalized && errors.some((error) => normalizeProviderKey(error.provider) === normalized));
 }
 
 function providerErrorsText(errors: ProviderError[]): string {
@@ -74,12 +91,23 @@ function isAnnualBillingCycle(value: any): boolean {
   return ['annual', 'year', 'yearly', 'anual'].includes(normalizeValue(value));
 }
 
+function getProviderStatus(userItem: any): string {
+  return normalizeValue(userItem.providerStatus || userItem.stripeStatus || userItem.appleStatus || userItem.googlePlayStatus || userItem.status || userItem.trialStatus);
+}
+
+function isTrialClient(userItem: any): boolean {
+  return userItem.isVerified === true && (
+    getProviderStatus(userItem) === 'trialing' ||
+    normalizeValue(userItem.trialStatus) === 'trialing'
+  );
+}
+
 function isActiveClient(userItem: any): boolean {
   return userItem.isVerified === true;
 }
 
 function isPayingClient(userItem: any): boolean {
-  return userItem.isVerified === true;
+  return userItem.isVerified === true && !isTrialClient(userItem);
 }
 
 function getMonthlyRevenue(userItem: any): number {
@@ -114,13 +142,19 @@ function getActiveClientSummary(users: any[]): { count: number; revenue: number 
 
 function updateTableSummary(users: any[]): void {
   const summary = getActiveClientSummary(users);
+  const trialCount = users.filter(isTrialClient).length;
   const canceledStripeCount = users.filter(hasStripeCancellation).length;
   const activeCountEl = document.querySelector('.cc-active-client-count');
+  const trialCountEl = document.querySelector('.cc-trial-client-count');
   const revenueEl = document.querySelector('.cc-active-revenue');
   const canceledEl = document.querySelector('.cc-stripe-cancel-count');
 
   if (activeCountEl) {
     activeCountEl.textContent = `${summary.count} cliente${summary.count !== 1 ? 's' : ''}`;
+  }
+
+  if (trialCountEl) {
+    trialCountEl.textContent = `${trialCount} trial${trialCount !== 1 ? 's' : ''}`;
   }
 
   if (revenueEl) {
@@ -135,14 +169,14 @@ function updateTableSummary(users: any[]): void {
 function statusBadge(status: string, verified: string | null): string {
   const s = (verified || status || '').toLowerCase();
   const map: Record<string, { label: string; cls: string }> = {
-    active:   { label: 'Ativo',     cls: 'cc-badge-paid' },
-    overdue:  { label: 'Inadimpl.', cls: 'cc-badge-pending' },
+    active: { label: 'Ativo', cls: 'cc-badge-paid' },
+    overdue: { label: 'Inadimpl.', cls: 'cc-badge-pending' },
     past_due: { label: 'Inadimpl.', cls: 'cc-badge-pending' },
-    trialing: { label: 'Trial',     cls: 'cc-badge-pending' },
-    inactive: { label: 'Inativo',   cls: 'cc-badge-inactive' },
+    trialing: { label: 'Trial', cls: 'cc-badge-pending' },
+    inactive: { label: 'Inativo', cls: 'cc-badge-inactive' },
     canceled: { label: 'Cancelado', cls: 'cc-badge-inactive' },
-    unpaid:   { label: 'Não Pago',  cls: 'cc-badge-charge' },
-    error:    { label: 'Erro API',  cls: 'cc-badge-charge' },
+    unpaid: { label: 'Não Pago', cls: 'cc-badge-charge' },
+    error: { label: 'Erro API', cls: 'cc-badge-charge' },
   };
   const entry = map[s] ?? { label: status || '—', cls: 'cc-badge-inactive' };
   return `<span class="cc-badge ${entry.cls}">${entry.label}</span>`;
@@ -156,6 +190,104 @@ function providerBadge(provider: string): string {
     return `<span class="cc-category cc-category-stripe">Stripe</span>`;
   }
   return `<span class="cc-category">—</span>`;
+}
+
+function normalizeSignupPlatformCandidate(value: any, isUserAgent = false): string {
+  let raw = normalizeValue(value);
+  if (!raw) return 'unknown';
+  if (isUserAgent) {
+    raw = raw.replace(/applewebkit/gi, '').replace(/safari/gi, '');
+  }
+  if (raw.includes('android')) return 'android';
+  if (raw.includes('iphone') || raw.includes('ipad') || raw.includes('ipod') || /(^|\W)ios(\W|$)/.test(raw) || raw.includes('apple')) return 'iphone';
+  if (raw.includes('mobile') || raw.includes('mobi') || raw.includes('celular')) return 'mobile';
+  if (raw === 'pc' || raw.includes('desktop') || raw.includes('web') || raw.includes('windows') || raw.includes('macintosh') || raw.includes('macbook') || raw.includes('linux')) return 'web';
+  return raw;
+}
+
+function getSignupPlatform(userItem: any): string {
+  const device = userItem.device || userItem.signupDevice || userItem.deviceInfo || {};
+  const candidates = [
+    userItem.signupPlatform,
+    device.signupPlatform,
+    userItem.platform,
+    device.platform,
+    device.os,
+    userItem.os,
+    userItem.operatingSystem,
+    userItem.deviceName,
+    device.deviceName,
+    userItem.deviceType,
+    device.deviceType,
+    device.name,
+    device.type,
+  ].map((value) => normalizeSignupPlatformCandidate(value));
+
+  const precisePlatform = candidates.find((platform) => platform === 'android' || platform === 'iphone');
+  if (precisePlatform) return precisePlatform;
+
+  const knownPlatform = candidates.find((platform) => platform === 'mobile' || platform === 'web');
+  if (knownPlatform) return knownPlatform;
+
+  const userAgent = normalizeSignupPlatformCandidate(
+    userItem.signupUserAgent || userItem.userAgent || device.userAgent,
+    true
+  );
+  if (['android', 'iphone', 'mobile', 'web'].includes(userAgent)) return userAgent;
+
+  // Fallback: infer platform from subscription provider (IAP trial users)
+  const providerKey = normalizeProviderKey(userItem.provider);
+  if (providerKey === 'apple') return 'apple_iap';
+  if (providerKey === 'android') return 'android';
+
+  const fallback = candidates.find((platform) => platform !== 'unknown') || 'unknown';
+  if (fallback === 'unknown') {
+    const createdDate = parseDateValue(userItem.createdAt || userItem.createdDate || userItem.dateCreated);
+    if (createdDate && createdDate.getTime() < new Date('2026-06-15T00:00:00Z').getTime()) {
+      return 'web';
+    }
+  }
+  return fallback;
+}
+
+function isMobileSignup(userItem: any): boolean {
+  const platform = getSignupPlatform(userItem);
+  if (['android', 'iphone', 'apple_iap', 'mobile'].includes(platform)) return true;
+  if (userItem.createdFromMobile === true) return true;
+  const source = normalizeValue(userItem.signupSource);
+  return source === 'mobile' || source === 'app';
+}
+
+function getSignupPlatformLabel(userItem: any): string {
+  const platform = getSignupPlatform(userItem);
+  if (platform === 'android') return 'Android';
+  if (platform === 'apple_iap') return 'Apple';
+  if (platform === 'iphone') return 'Apple';
+  if (platform === 'mobile') return 'Celular';
+  if (platform === 'web') return 'Web';
+  return 'Não Informado';
+}
+
+function getSignupOriginClass(userItem: any): string {
+  const platform = getSignupPlatform(userItem);
+  const isMobile = isMobileSignup(userItem);
+  if (platform === 'android') return 'cc-origin-android';
+  if (platform === 'apple_iap') return 'cc-origin-iphone';
+  if (platform === 'iphone') return 'cc-origin-iphone';
+  if (isMobile) return 'cc-origin-mobile';
+  if (platform === 'web') return 'cc-origin-desktop';
+  return 'cc-origin-unknown';
+}
+
+function getSignupOriginSourceLabel(userItem: any): string {
+  const platform = getSignupPlatform(userItem);
+  const isMobile = isMobileSignup(userItem);
+  if (platform === 'android') return 'Criada no Android';
+  if (platform === 'apple_iap') return 'Criada no Apple';
+  if (platform === 'iphone') return 'Criada na Apple';
+  if (isMobile) return 'Criada pelo celular';
+  if (platform === 'web') return 'Criada na web';
+  return 'Origem nao informada';
 }
 
 function fmtDate(dateStr: string | null): string {
@@ -199,7 +331,7 @@ function getStripeCancellationInfo(userItem: any): null | {
     requestedAt,
     effectiveAt,
     endedAt,
-    isInMrr: userItem.isVerified === true && ['active', 'trialing'].includes(status),
+    isInMrr: userItem.isVerified === true && status === 'active',
   };
 }
 
@@ -228,6 +360,32 @@ function renderCancellationNote(userItem: any): string {
   `;
 }
 
+function renderSubscriptionTimelineNote(userItem: any): string {
+  const trialEnd = userItem.trialEndsAt || userItem.trialEndsDate || null;
+  const paidAt = userItem.firstPaidAt || userItem.convertedToPaidAt || null;
+
+  if (isTrialClient(userItem) && trialEnd) {
+    const trialDuration = getTrialDurationDays(userItem) || 7;
+    return `
+      <span class="cc-timeline-chip cc-timeline-trial" title="Trial de ${trialDuration} dias">
+        <span class="cc-timeline-dot"></span>
+        <span>Trial ate ${fmtShortDate(trialEnd) || fmtDate(trialEnd)}</span>
+      </span>
+    `;
+  }
+
+  if (paidAt) {
+    return `
+      <span class="cc-timeline-chip cc-timeline-paid" title="Virou pagante em ${fmtDate(paidAt)}">
+        <span class="cc-timeline-dot"></span>
+        <span>Pagou ${fmtShortDate(paidAt) || fmtDate(paidAt)}</span>
+      </span>
+    `;
+  }
+
+  return '';
+}
+
 function renderCancellationModalRows(userItem: any): string {
   const info = getStripeCancellationInfo(userItem);
   if (!info) return '';
@@ -254,6 +412,51 @@ function renderCancellationModalRows(userItem: any): string {
   `;
 }
 
+function renderSubscriptionModalTimelineRows(userItem: any): string {
+  const rows: string[] = [];
+  const trialStartedAt = userItem.trialStartedAt || userItem.trialStartedDate || null;
+  const trialEndsAt = userItem.trialEndsAt || userItem.trialEndsDate || null;
+  const paidAt = userItem.firstPaidAt || userItem.convertedToPaidAt || null;
+
+  if (userItem.trialDays || trialStartedAt || trialEndsAt) {
+    rows.push(`
+      <div class="flex justify-between items-center px-4 sm:px-8 py-3 border-b border-[var(--color-border)]/50">
+        <span class="text-[var(--color-text-secondary)]">Trial</span>
+        <span class="font-medium">${getTrialDurationDays(userItem) || userItem.trialDays || 7} dias</span>
+      </div>
+    `);
+  }
+
+  if (trialStartedAt) {
+    rows.push(`
+      <div class="flex justify-between items-center px-4 sm:px-8 py-3 border-b border-[var(--color-border)]/50">
+        <span class="text-[var(--color-text-secondary)]">Inicio do trial</span>
+        <span class="font-medium">${fmtDate(trialStartedAt)}</span>
+      </div>
+    `);
+  }
+
+  if (trialEndsAt) {
+    rows.push(`
+      <div class="flex justify-between items-center px-4 sm:px-8 py-3 border-b border-[var(--color-border)]/50">
+        <span class="text-[var(--color-text-secondary)]">Fim do trial</span>
+        <span class="font-medium">${fmtDate(trialEndsAt)}</span>
+      </div>
+    `);
+  }
+
+  if (paidAt) {
+    rows.push(`
+      <div class="flex justify-between items-center px-4 sm:px-8 py-3 border-b border-[var(--color-border)]/50">
+        <span class="text-[var(--color-text-secondary)]">Pagante desde</span>
+        <span class="font-medium">${fmtDate(paidAt)}</span>
+      </div>
+    `);
+  }
+
+  return rows.join('');
+}
+
 function fmtRelativeTime(dateStr: string | null): { text: string; color: string } {
   if (!dateStr) return { text: 'Nunca entrou', color: 'var(--color-text-secondary)' };
   const d = new Date(dateStr);
@@ -261,7 +464,7 @@ function fmtRelativeTime(dateStr: string | null): { text: string; color: string 
   const diffMs = Date.now() - d.getTime();
   const diffSec = Math.floor(diffMs / 1000);
   const diffMin = Math.floor(diffSec / 60);
-  const diffHr  = Math.floor(diffMin / 60);
+  const diffHr = Math.floor(diffMin / 60);
   const diffDay = Math.floor(diffHr / 24);
 
   let text: string;
@@ -287,145 +490,644 @@ function fmtRelativeTime(dateStr: string | null): { text: string; color: string 
   return { text, color };
 }
 
-function renderRow(userItem: any): string {
-  const roleLabel = userItem.isAdmin ? '<span class="cc-badge cc-badge-paid">Admin</span>' : '<span class="cc-badge cc-badge-inactive">Usuário</span>';
+function escapeHtml(value: any): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
-  // "Pro" so para quem esta efetivamente pagando (verificado ao vivo no provedor).
-  // Usuarios com plan:'pro' no Firestore mas sem assinatura ativa entram como "Sem plano".
-  const isPaying = userItem.isVerified === true;
-  const verificationUnavailable = userItem.verificationUnavailable === true;
-  let planLabel = verificationUnavailable
-    ? '<span class="cc-badge cc-badge-pending">Pendente</span>'
-    : isPaying
-      ? '<span class="cc-badge cc-badge-paid">Pro</span>'
-      : '<span class="cc-badge cc-badge-inactive">Sem plano</span>';
+function safeJsonAttr(value: any): string {
+  return escapeHtml(JSON.stringify(value));
+}
 
-  let providerHtml = '<span class="cc-badge cc-badge-inactive">Sistema</span>';
-  if (userItem.provider === 'asaas') {
-    providerHtml = `<img src="/assets/logo/assas.png" class="cc-provider-img" title="Asaas" />`;
-  } else if (userItem.provider === 'stripe') {
-    providerHtml = `<img src="/assets/logo/stripe.png" class="cc-provider-img" title="Stripe" />`;
+function parseDateValue(value: any): Date | null {
+  if (!value) return null;
+  if (typeof value?.toDate === 'function') {
+    const date = value.toDate();
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  const date = value instanceof Date ? value : new Date(String(value));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getTrialStartValue(userItem: any): string | null {
+  return userItem.trialStartedAt || userItem.trialStartedDate || userItem.trialStart || null;
+}
+
+function getTrialEndValue(userItem: any): string | null {
+  return userItem.trialEndsAt || userItem.trialEndsDate || userItem.trialEnd || null;
+}
+
+function hasTrialHistory(userItem: any): boolean {
+  return Boolean(
+    getTrialStartValue(userItem) ||
+    getTrialEndValue(userItem) ||
+    userItem.trialDays ||
+    normalizeValue(userItem.trialStatus)
+  );
+}
+
+function getTrialDaysRemaining(userItem: any): number | null {
+  const rawEnd = getTrialEndValue(userItem);
+  const endDate = parseDateValue(rawEnd);
+  if (!endDate) return null;
+
+  const endOfDay = new Date(endDate);
+  if (typeof rawEnd === 'string' && !rawEnd.includes('T')) {
+    endOfDay.setHours(23, 59, 59, 999);
   }
 
-  const targetIcon = userItem.provider === 'asaas' ? verifiedIconAsaas : verifiedIconStripe;
-  
-  let verifiedBadgeHtml = '';
+  return Math.ceil((endOfDay.getTime() - Date.now()) / 86400000);
+}
+
+function getTrialDurationDays(userItem: any): number | null {
+  const rawTrialDays = Number(userItem.trialDays);
+  if (Number.isFinite(rawTrialDays) && rawTrialDays > 0) {
+    return Math.round(rawTrialDays);
+  }
+
+  const startDate = parseDateValue(getTrialStartValue(userItem));
+  const endDate = parseDateValue(getTrialEndValue(userItem));
+  if (!startDate || !endDate) return null;
+
+  const diffDays = Math.round((endDate.getTime() - startDate.getTime()) / 86400000);
+  return diffDays > 0 ? diffDays : null;
+}
+
+function isSevenDayTrial(userItem: any): boolean {
+  return getTrialDurationDays(userItem) === 7;
+}
+
+function isConvertedClient(userItem: any): boolean {
+  if (isPayingClient(userItem)) return true;
+  if (userItem.firstPaidAt || userItem.firstPaidDate || userItem.convertedToPaidAt || userItem.convertedToPaidDate) return true;
+
+  const plan = normalizeValue(userItem.plan);
+  const status = getProviderStatus(userItem);
+  return plan === 'pro' && ['active', 'overdue', 'past_due', 'canceled', 'cancelled', 'unpaid'].includes(status);
+}
+
+function isConvertedCanceledClient(userItem: any): boolean {
+  if (!isConvertedClient(userItem)) return false;
+  const status = getProviderStatus(userItem);
+  return hasStripeCancellation(userItem) ||
+    ['canceled', 'cancelled'].includes(status) ||
+    Boolean(userItem.canceledAt || userItem.canceledAtDate || userItem.endedAt || userItem.endedAtDate);
+}
+
+function getTrialStatusKey(userItem: any): 'active' | 'expired' | 'converted' | 'none' {
+  if (isTrialClient(userItem) || normalizeValue(userItem.trialStatus) === 'trialing') return 'active';
+  if (isConvertedClient(userItem)) return 'converted';
+
+  const daysRemaining = getTrialDaysRemaining(userItem);
+  if (daysRemaining !== null) {
+    return daysRemaining >= 0 ? 'active' : 'expired';
+  }
+
+  if (hasTrialHistory(userItem)) return 'expired';
+  return 'none';
+}
+
+function trialStatusLabel(status: string): string {
+  const map: Record<string, string> = {
+    active: 'Ativo',
+    expired: 'Expirado',
+    converted: 'Convertido',
+    none: 'Sem trial',
+  };
+  return map[status] || 'Sem trial';
+}
+
+type SubscriptionStatusKey = 'active' | 'trialing' | 'inactive' | 'pending' | 'error' | 'canceled';
+
+function getSubscriptionStatusKey(userItem: any): SubscriptionStatusKey {
+  const providerStatus = getProviderStatus(userItem);
+  if (providerStatus === 'error') return 'error';
+  if (['pending', 'incomplete'].includes(providerStatus)) return 'pending';
+  if (['canceled', 'cancelled'].includes(providerStatus)) return 'canceled';
+  if (isTrialClient(userItem) || providerStatus === 'trialing') return 'trialing';
+  if (isPayingClient(userItem) || (normalizeValue(userItem.plan) === 'pro' && providerStatus === 'active')) return 'active';
+  return 'inactive';
+}
+
+function subscriptionStatusLabel(status: string): string {
+  if (status === 'active' || status === 'trialing') return 'Ativo';
+  return 'Inativo';
+}
+
+function renderTrialStatusMiniBadge(userItem: any): string {
+  const status = getTrialStatusKey(userItem);
+  const cls = status === 'active'
+    ? 'cc-status-good'
+    : status === 'expired'
+      ? 'cc-status-warn'
+      : status === 'converted'
+        ? 'cc-status-info'
+        : 'cc-status-muted';
+  return `<span class="cc-status-pill cc-status-pill-mini ${cls}"><span class="cc-status-context">Trial</span>${trialStatusLabel(status).toLowerCase()}</span>`;
+}
+
+function renderSubscriptionStatusMiniBadge(userItem: any): string {
+  const status = getSubscriptionStatusKey(userItem);
+  const cls = (status === 'active' || status === 'trialing')
+    ? 'cc-status-good'
+    : 'cc-status-muted';
+  return `<span class="cc-status-pill cc-status-pill-mini ${cls}"><span class="cc-status-context">Ass.</span>${subscriptionStatusLabel(status).toLowerCase()}</span>`;
+}
+
+function getTrialDaysCompactInfo(userItem: any): { label: string; detail: string; cls: string } {
+  const status = getTrialStatusKey(userItem);
+  const daysRemaining = getTrialDaysRemaining(userItem);
+  const durationDays = getTrialDurationDays(userItem);
+
+  if (isConvertedClient(userItem)) {
+    const convertedDate = userItem.convertedToPaidAt || userItem.firstPaidAt || userItem.convertedToPaidDate || userItem.firstPaidDate || null;
+    return {
+      label: 'Pago',
+      detail: convertedDate ? `Convertido ${fmtShortDate(convertedDate) || fmtDate(convertedDate)}` : 'Cliente convertido',
+      cls: 'cc-funnel-good',
+    };
+  }
+
+  if (daysRemaining === null) {
+    return {
+      label: hasTrialHistory(userItem) ? 'Sem prazo' : 'Sem trial',
+      detail: hasTrialHistory(userItem) ? 'Trial sem data final' : 'Nenhum trial registrado',
+      cls: 'cc-funnel-muted',
+    };
+  }
+
+  if (daysRemaining < 0) {
+    const absDays = Math.abs(daysRemaining);
+    return {
+      label: `Expirou ha ${absDays}d`,
+      detail: `Trial vencido ha ${absDays} dia${absDays !== 1 ? 's' : ''}`,
+      cls: 'cc-funnel-warn',
+    };
+  }
+
+  if (daysRemaining === 0) {
+    return {
+      label: 'Vence hoje',
+      detail: 'Acompanhar hoje',
+      cls: 'cc-funnel-warn',
+    };
+  }
+
+  return {
+    label: `${daysRemaining}d restantes`,
+    detail: durationDays ? `Trial de ${durationDays} dias` : (daysRemaining <= 3 ? 'Acompanhar de perto' : 'Dentro do prazo'),
+    cls: daysRemaining <= 3 ? 'cc-funnel-warn' : 'cc-funnel-neutral',
+  };
+}
+
+function getTrialDateCompactLabel(userItem: any): string {
+  const start = getTrialStartValue(userItem);
+  const end = getTrialEndValue(userItem);
+
+  if (isConvertedClient(userItem)) {
+    const convertedDate = userItem.convertedToPaidAt || userItem.firstPaidAt || userItem.convertedToPaidDate || userItem.firstPaidDate || null;
+    return convertedDate ? `Convertido ${fmtShortDate(convertedDate) || fmtDate(convertedDate)}` : 'Convertido';
+  }
+  if (!hasTrialHistory(userItem)) return 'Sem trial';
+  if (start && end) return `Trial ${fmtShortDate(start) || fmtDate(start)} - ${fmtShortDate(end) || fmtDate(end)}`;
+  if (start) return `Inicio ${fmtShortDate(start) || fmtDate(start)}`;
+  if (end) return `Fim ${fmtShortDate(end) || fmtDate(end)}`;
+  return 'Trial sem datas';
+}
+
+function showFunnelModal(userItem: any) {
+  const originLabel = getSignupPlatformLabel(userItem);
+  const trialStatus = getTrialStatusKey(userItem);
+  const subStatus = getSubscriptionStatusKey(userItem);
+
+  const trialLabel = trialStatus === 'active' ? 'Trial ativo' : trialStatus === 'expired' ? 'Trial expirado' : trialStatus === 'converted' ? 'Convertido' : 'Sem trial';
+  const trialClass = trialStatus === 'active' ? 'cc-fbg-good' : trialStatus === 'expired' ? 'cc-fbg-warn' : trialStatus === 'converted' ? 'cc-fbg-info' : 'cc-fbg-muted';
+
+  const clientLabel = subStatus === 'active' ? 'Pagante' : subStatus === 'trialing' ? 'Trial ativo' : 'Inativo';
+  const clientClass = subStatus === 'active' ? 'cc-fbg-good' : subStatus === 'trialing' ? 'cc-fbg-info' : 'cc-fbg-muted';
+
+  const isVerified = userItem.isVerified === true;
+  const provider = normalizeProviderKey(userItem.provider);
+  const verifiedLabel = isVerified && isVerifiableProvider(provider) ? providerName(provider) : 'N/A';
+  const verifiedClass = isVerified && isVerifiableProvider(provider) ? 'cc-fbg-good' : 'cc-fbg-muted';
+
+  const content = `
+    <div class="w-full flex flex-col items-center justify-center py-6 bg-[var(--color-background)]">
+
+      <div class="flex flex-col w-full max-w-[420px] mx-auto relative pt-2">
+
+        <!-- Row 1 -->
+        <div class="flex w-full items-stretch" style="height: 40px;">
+          <div class="w-[120px] flex justify-end items-center pr-4">
+            <span class="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider">1. Origem</span>
+          </div>
+          <div class="w-[24px] flex flex-col items-center justify-center relative">
+            <div class="absolute top-1/2 bottom-0 w-[2px] bg-[var(--color-border)]"></div>
+            <div class="w-[6px] h-[6px] rounded-full bg-[var(--color-text-secondary)] ring-4 ring-[var(--color-background)] relative z-10"></div>
+          </div>
+          <div class="flex-1 flex justify-center items-center pl-2">
+            <div class="cc-fbg-origin flex items-center justify-center text-white text-[11px] font-bold uppercase rounded-lg w-full h-[40px]">
+              ${escapeHtml(originLabel)}
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 2 -->
+        <div class="flex w-full items-stretch" style="height: 40px;">
+          <div class="w-[120px] flex justify-end items-center pr-4">
+            <span class="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider">2. Status Trial</span>
+          </div>
+          <div class="w-[24px] flex flex-col items-center justify-center relative">
+            <div class="absolute top-0 bottom-0 w-[2px] bg-[var(--color-border)]"></div>
+            <div class="w-[6px] h-[6px] rounded-full bg-[var(--color-text-secondary)] ring-4 ring-[var(--color-background)] relative z-10"></div>
+          </div>
+          <div class="flex-1 flex justify-center items-center pl-2">
+            <div class="${trialClass} flex items-center justify-center text-white text-[11px] font-bold uppercase rounded-lg w-[86%] h-[40px]">
+              ${escapeHtml(trialLabel)}
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 3 -->
+        <div class="flex w-full items-stretch" style="height: 40px;">
+          <div class="w-[120px] flex justify-end items-center pr-4">
+            <span class="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider">3. Cliente</span>
+          </div>
+          <div class="w-[24px] flex flex-col items-center justify-center relative">
+            <div class="absolute top-0 bottom-0 w-[2px] bg-[var(--color-border)]"></div>
+            <div class="w-[6px] h-[6px] rounded-full bg-[var(--color-text-secondary)] ring-4 ring-[var(--color-background)] relative z-10"></div>
+          </div>
+          <div class="flex-1 flex justify-center items-center pl-2">
+            <div class="${clientClass} flex items-center justify-center text-white text-[11px] font-bold uppercase rounded-lg w-[73%] h-[40px]">
+              ${escapeHtml(clientLabel)}
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 4 -->
+        <div class="flex w-full items-stretch" style="height: 40px;">
+          <div class="w-[120px] flex justify-end items-center pr-4">
+            <span class="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider">4. Gateway</span>
+          </div>
+          <div class="w-[24px] flex flex-col items-center justify-center relative">
+            <div class="absolute top-0 bottom-1/2 w-[2px] bg-[var(--color-border)]"></div>
+            <div class="w-[6px] h-[6px] rounded-full bg-[var(--color-text-secondary)] ring-4 ring-[var(--color-background)] relative z-10"></div>
+          </div>
+          <div class="flex-1 flex justify-center items-center pl-2">
+            <div class="${verifiedClass} flex items-center justify-center text-white text-[11px] font-bold uppercase rounded-lg w-[60%] h-[40px]">
+              ${escapeHtml(verifiedLabel)}
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  `;
+
+  Modal({
+    title: 'Visualização do Funil',
+    content,
+    showFooter: false,
+    fieldsPadding: 'p-0',
+    maxWidth: 'max-w-md'
+  });
+}
+
+function renderFunnelCell(userItem: any): string {
+  return `
+    <button type="button" class="cc-action-btn user-btn-funnel hover:bg-[var(--color-surface-hover)]" data-user='${safeJsonAttr(userItem)}' title="Abrir Funil" style="padding: 6px 10px; border: 1px solid var(--color-border); border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--color-text-secondary); transition: all 0.15s; white-space: nowrap; width: max-content;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;">
+        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+      </svg>
+      <span>Ver Funil</span>
+    </button>
+  `;
+}
+
+function getConnectedBankCount(userItem: any): number {
+  return Number(userItem.connectedBankCount || 0);
+}
+
+function hasConnectedBank(userItem: any): boolean {
+  return userItem.bankDataUnavailable !== true && getConnectedBankCount(userItem) > 0;
+}
+
+function renderBankCell(userItem: any): string {
+  if (userItem.bankDataUnavailable === true) {
+    return `
+      <div class="cc-cell-stack">
+        <strong>Sem dados</strong>
+        <span>Pluggy indisponivel</span>
+      </div>
+    `;
+  }
+
+  const bankCount = getConnectedBankCount(userItem);
+  const lastSync = userItem.lastBankSync || null;
+  const rel = fmtRelativeTime(lastSync);
+
+  if (bankCount === 0) {
+    return `
+      <div class="cc-cell-stack cc-cell-muted">
+        <strong>0 bancos</strong>
+        <span>${lastSync ? `Sync ${rel.text.toLowerCase()}` : 'Nunca sincronizou'}</span>
+      </div>
+    `;
+  }
+
+  const bankData = Array.isArray(userItem.connectedBankData) ? userItem.connectedBankData : [];
+  const names = bankData.map((b: any) => b.name);
+  if (names.length === 0 && Array.isArray(userItem.connectedBankNames)) {
+    names.push(...userItem.connectedBankNames);
+  }
+  const label = names.slice(0, 2).join(', ') || 'Banco conectado';
+  const hidden = names.length > 2 ? ` +${names.length - 2}` : '';
+  const accounts = Number(userItem.connectedAccountCount || 0);
+
+  const bankIcon = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="opacity-60"><line x1="3" x2="21" y1="22" y2="22"/><line x1="6" x2="6" y1="18" y2="11"/><line x1="10" x2="10" y1="18" y2="11"/><line x1="14" x2="14" y1="18" y2="11"/><line x1="18" x2="18" y1="18" y2="11"/><polygon points="12 2 20 7 4 7"/></svg>`;
+
+  return `
+    <div class="cc-cell-stack" title="${escapeHtml(names.join(', '))}">
+      <strong style="display:flex;align-items:center;gap:6px;">
+        ${bankIcon}
+        <span>${bankCount} banco${bankCount !== 1 ? 's' : ''}${accounts ? ` / ${accounts} conta${accounts !== 1 ? 's' : ''}` : ''}</span>
+      </strong>
+      <span>${escapeHtml(label)}${hidden} • <span style="color:${rel.color};font-weight:500;">sync ${rel.text.toLowerCase()}</span></span>
+    </div>
+  `;
+}
+
+function renderLastAccessCell(userItem: any): string {
+  const rel = fmtRelativeTime(userItem.lastLogin);
+  const days = userItem.activeDaysCount || 0;
+  return `
+    <div class="cc-date-cell">
+      <strong style="color:${rel.color};">${rel.text}</strong>
+      <span>${days > 0 ? `${days} dia${days !== 1 ? 's' : ''} de uso` : 'Sem registros'}</span>
+    </div>
+  `;
+}
+
+function getLastAccessDays(userItem: any): number | null {
+  const lastAccess = parseDateValue(userItem.lastLogin);
+  if (!lastAccess) return null;
+  return Math.floor((Date.now() - lastAccess.getTime()) / 86400000);
+}
+
+function mergePluggyRowsIntoUsers(users: any[], rows: any[], unavailable = false): void {
+  const byUid = new Map<string, {
+    bankDataMap: Map<string, string | null>;
+    connectionCount: number;
+    accountCount: number;
+    lastSync: string | null;
+    statuses: Set<string>;
+  }>();
+
+  rows.forEach((row) => {
+    if (!row?.uid) return;
+    const current = byUid.get(row.uid) || {
+      bankDataMap: new Map<string, string | null>(),
+      connectionCount: 0,
+      accountCount: 0,
+      lastSync: null,
+      statuses: new Set<string>(),
+    };
+
+    current.connectionCount += 1;
+    current.accountCount += Number(row.accountCount || 0);
+    
+    if (Array.isArray(row.bankDataList)) {
+      row.bankDataList.forEach((b: any) => {
+        if (b.name) {
+          if (!current.bankDataMap.has(b.name) || b.logo) {
+            current.bankDataMap.set(b.name, b.logo);
+          }
+        }
+      });
+    } else {
+      (row.banks || []).forEach((bank: string) => {
+        if (bank && !current.bankDataMap.has(bank)) current.bankDataMap.set(bank, null);
+      });
+    }
+
+    if (row.status) current.statuses.add(row.status);
+    if (row.lastSync && (!current.lastSync || new Date(row.lastSync).getTime() > new Date(current.lastSync).getTime())) {
+      current.lastSync = row.lastSync;
+    }
+    byUid.set(row.uid, current);
+  });
+
+  users.forEach((userItem) => {
+    const summary = byUid.get(userItem.uid);
+    userItem.bankDataUnavailable = unavailable;
+    userItem.connectedBankData = summary ? Array.from(summary.bankDataMap.entries()).map(([name, logo]) => ({name, logo})) : [];
+    userItem.connectedBankNames = summary ? Array.from(summary.bankDataMap.keys()) : [];
+    userItem.connectedBankCount = summary ? Math.max(summary.bankDataMap.size, summary.connectionCount) : 0;
+    userItem.connectedAccountCount = summary?.accountCount || 0;
+    userItem.lastBankSync = summary?.lastSync || null;
+    userItem.bankConnectionStatuses = summary ? Array.from(summary.statuses) : [];
+  });
+}
+
+function getGrowthMetrics(users: any[]) {
+  const mobileSignups = users.filter(isMobileSignup).length;
+  const androidSignups = users.filter((u) => getSignupPlatform(u) === 'android').length;
+  const iphoneSignups = users.filter((u) => getSignupPlatform(u) === 'iphone').length;
+  const appleSignups = users.filter((u) => getSignupPlatform(u) === 'apple_iap').length;
+  const activeTrials = users.filter((u) => getTrialStatusKey(u) === 'active').length;
+  const sevenDayTrials = users.filter(isSevenDayTrial).length;
+  const expiredTrials = users.filter((u) => getTrialStatusKey(u) === 'expired').length;
+  const convertedClients = users.filter(isConvertedClient).length;
+  const conversionBase = users.filter((u) => hasTrialHistory(u) || isConvertedClient(u)).length;
+  const activeSummary = getActiveClientSummary(users);
+  const knownBankUsers = users.filter((u) => u.bankDataUnavailable !== true);
+  const averageBanks = knownBankUsers.length
+    ? knownBankUsers.reduce((sum, u) => sum + getConnectedBankCount(u), 0) / knownBankUsers.length
+    : null;
+
+  return {
+    mobileSignups,
+    androidSignups,
+    iphoneSignups,
+    appleSignups,
+    activeTrials,
+    sevenDayTrials,
+    expiredTrials,
+    convertedClients,
+    conversionRate: conversionBase ? convertedClients / conversionBase : 0,
+    averageBanks,
+    activeSubscriptions: activeSummary.count,
+    mrr: activeSummary.revenue,
+    canceledConverted: users.filter(isConvertedCanceledClient).length,
+  };
+}
+
+function growthKpiCard(label: string, value: string, hint: string, icon: string): string {
+  return `
+    <div class="growth-kpi-card">
+      <div class="growth-kpi-head">
+        <span class="growth-kpi-icon">${icon}</span>
+        <span>${label}</span>
+      </div>
+      <strong>${value}</strong>
+      <small>${hint}</small>
+    </div>
+  `;
+}
+
+function renderGrowthKpis(users: any[]): string {
+  const metrics = getGrowthMetrics(users);
+  const bankValue = metrics.averageBanks === null ? '-' : decimalFormatter.format(metrics.averageBanks);
+  const appleTotal = metrics.iphoneSignups + metrics.appleSignups;
+  const mobileBreakdown = `${metrics.androidSignups} Android / ${appleTotal} Apple`;
+
+  return `
+    <div class="growth-kpi-grid" id="growth-kpi-grid">
+      ${growthKpiCard('Criadas no celular', String(metrics.mobileSignups), mobileBreakdown, '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>')}
+      ${growthKpiCard('Android', String(metrics.androidSignups), 'Contas criadas no Android', '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 16V8a7 7 0 0 1 14 0v8"/><path d="M5 12h14"/><path d="M9 4 7 1"/><path d="m15 4 2-3"/></svg>')}
+      ${growthKpiCard('Apple', String(appleTotal), 'Contas criadas na Apple', '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>')}
+      ${growthKpiCard('Trials 7 dias', String(metrics.sevenDayTrials), `${metrics.activeTrials} trial${metrics.activeTrials !== 1 ? 's' : ''} ativo${metrics.activeTrials !== 1 ? 's' : ''}`, '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18"/><path d="M10 15h4"/></svg>')}
+      ${growthKpiCard('Pagantes', String(metrics.activeSubscriptions), 'Assinaturas pagas verificadas agora', '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/><path d="M7 15h.01M11 15h2"/></svg>')}
+      ${growthKpiCard('Trials expirados', String(metrics.expiredTrials), 'Trials vencidos sem pagamento', '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>')}
+      ${growthKpiCard('Media de bancos conectados', bankValue, metrics.averageBanks === null ? 'Dados Pluggy indisponiveis' : 'Media por usuario', '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 10 9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/></svg>')}
+      ${growthKpiCard('MRR', moneyFormatter.format(metrics.mrr), 'Receita mensal recorrente', '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>')}
+    </div>
+  `;
+}
+
+function updateGrowthKpis(users: any[]): void {
+  const grid = document.getElementById('growth-kpi-grid');
+  if (!grid) return;
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = renderGrowthKpis(users);
+  const nextGrid = wrapper.firstElementChild;
+  if (nextGrid) grid.replaceWith(nextGrid);
+}
+
+function renderUserVerificationBadge(userItem: any, tooltipId = `v-t-${userItem.uid}`): string {
+  const provider = normalizeProviderKey(userItem.provider);
+  if (!isVerifiableProvider(provider)) return '';
+
+  const providerLabel = providerName(provider);
+  const icon = provider === 'asaas'
+    ? verifiedIconAsaas
+    : provider === 'stripe'
+      ? verifiedIconStripe
+      : provider === 'apple'
+        ? verifiedIconApple
+        : verifiedIconAndroid;
+
   if (userItem.isVerified === true) {
-    verifiedBadgeHtml = Tooltip({
-      id: `v-t-${userItem.uid}`,
-      className: `user-verify-badge-${userItem.uid}`,
-      content: targetIcon,
-      text: `Assinatura verificada no ${userItem.provider === 'asaas' ? 'Asaas' : 'Stripe'}`
-    });
-  } else if (verificationUnavailable && (userItem.provider === 'stripe' || userItem.provider === 'asaas')) {
-    verifiedBadgeHtml = Tooltip({
-      id: `v-t-${userItem.uid}`,
-      className: `user-verify-badge-${userItem.uid}`,
-      content: warningIcon,
-      text: `Nao foi possivel verificar o ${userItem.provider === 'asaas' ? 'Asaas' : 'Stripe'} agora`
-    });
-  } else if (userItem.isVerified === undefined && (userItem.provider === 'stripe' || userItem.provider === 'asaas')) {
-    verifiedBadgeHtml = Tooltip({
-      id: `v-t-${userItem.uid}`,
-      className: `user-verify-badge-${userItem.uid}`,
-      content: loaderIcon,
-      text: `Verificando status no ${userItem.provider === 'asaas' ? 'Asaas' : 'Stripe'}...`
+    return Tooltip({
+      id: tooltipId,
+      className: `cc-user-verify-tooltip cc-user-verify-${provider}`,
+      content: icon,
+      text: `Verificado ${providerLabel}\nAssinatura ativa confirmada pela API ${provider === 'apple' ? 'da App Store' : provider === 'android' ? 'do Google Play' : 'do provedor'}.`
     });
   }
+
+  if (userItem.verificationUnavailable === true) {
+    return Tooltip({
+      id: tooltipId,
+      className: 'cc-user-verify-tooltip cc-user-verify-pending',
+      content: warningIcon,
+      text: `Verificacao ${providerLabel} indisponivel\nNao foi possivel confirmar agora.`
+    });
+  }
+
+  if (userItem.isVerified === undefined) {
+    return Tooltip({
+      id: tooltipId,
+      className: 'cc-user-verify-tooltip cc-user-verify-loading',
+      content: loaderIcon,
+      text: `Verificando ${providerLabel}\nConsultando status da assinatura.`
+    });
+  }
+
+  return '';
+}
+
+function renderProviderLabel(userItem: any): string {
+  const provider = normalizeProviderKey(userItem.provider);
+  if (provider === 'asaas') return `<img src="/assets/logo/assas.png" class="cc-provider-img" /> <span class="font-medium">Asaas</span>`;
+  if (provider === 'stripe') return `<img src="/assets/logo/stripe.png" class="cc-provider-img" /> <span class="font-medium">Stripe</span>`;
+  if (provider === 'apple') return `<span class="font-medium">Apple IAP</span>`;
+  if (provider === 'android') return `<span class="font-medium">Google Play</span>`;
+  return `<span class="capitalize font-medium">Sistema / Base</span>`;
+}
+
+function renderRow(userItem: any): string {
+  const verifiedBadgeHtml = renderUserVerificationBadge(userItem);
 
   return `
     <tr>
       <td>
-        <div class="flex items-center gap-3">
-          <div class="avvvatar-target shrink-0" data-val="${userItem.email || userItem.uid}" style="width:32px;height:32px;border-radius:12px;overflow:hidden;"></div>
-          <div class="overflow-hidden">
-            <div class="flex items-center gap-1.5" style="font-weight:500;font-size:13px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;" title="${userItem.name}">
-              <span class="truncate">${userItem.name}</span>
+        <div class="cc-user-main">
+          <div class="avvvatar-target shrink-0" data-val="${escapeHtml(userItem.email || userItem.uid)}" style="width:32px;height:32px;border-radius:12px;overflow:hidden;"></div>
+          <div class="cc-user-copy">
+            <div class="cc-user-name" title="${escapeHtml(userItem.name)}">
+              <span>${escapeHtml(userItem.name || userItem.email || userItem.uid)}</span>
               ${verifiedBadgeHtml}
             </div>
-            <div style="font-size:11.5px;color:var(--color-text-secondary);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;" title="${userItem.email}">${userItem.email}</div>
+            <div class="cc-user-email" title="${escapeHtml(userItem.email)}">${escapeHtml(userItem.email || userItem.uid)}</div>
           </div>
         </div>
       </td>
-      <td>${roleLabel}</td>
-      <td>
-        <div class="cc-plan-cell">
-          ${planLabel}
-          ${renderCancellationNote(userItem)}
-        </div>
-      </td>
-      <td>${providerHtml}</td>
-      <td>
-        ${(() => {
-          const rel = fmtRelativeTime(userItem.lastLogin);
-          const days = userItem.activeDaysCount || 0;
-          const dotColor = rel.color === '#22c55e' ? '#22c55e' : rel.color === '#f59e0b' ? '#f59e0b' : 'var(--color-text-secondary)';
-          return `
-            <div style="display:flex;flex-direction:column;gap:2px;">
-              <div style="display:flex;align-items:center;gap:5px;">
-                <span style="width:6px;height:6px;border-radius:50%;background:${dotColor};flex-shrink:0;"></span>
-                <span style="font-size:13px;font-weight:500;white-space:nowrap;color:${rel.color};">${rel.text}</span>
-              </div>
-              <div style="font-size:11px;color:var(--color-text-secondary);white-space:nowrap;padding-left:11px;">
-                ${days > 0 ? `${days} dia${days !== 1 ? 's' : ''} de uso` : 'Sem registros'}
-              </div>
-            </div>
-          `;
-        })()}
-      </td>
-      <td style="font-variant-numeric:tabular-nums;white-space:nowrap;font-size:13px;">
-        ${fmtDate(userItem.createdAt)}
-      </td>
+      <td>${renderFunnelCell(userItem)}</td>
+      <td>${renderBankCell(userItem)}</td>
+      <td>${renderLastAccessCell(userItem)}</td>
       <td style="text-align:right;">
-        <!-- Desktop: 3 botões separados -->
         <div class="flex items-center justify-end gap-2 cc-desktop-actions">
-          <button class="cc-action-btn user-btn-info" data-user='${JSON.stringify(userItem).replace(/'/g, "&#39;")}' title="Ver Informações">
+          <button class="cc-action-btn user-btn-info" data-user='${safeJsonAttr(userItem)}' title="Ver Informações">
              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                <circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>
              </svg>
           </button>
-          <button class="cc-action-btn user-btn-admin" data-uid="${userItem.uid}" data-is-admin="${userItem.isAdmin}" title="${userItem.isAdmin ? 'Remover Admin' : 'Tornar Admin'}">
+          <button class="cc-action-btn user-btn-admin" data-uid="${escapeHtml(userItem.uid)}" data-is-admin="${userItem.isAdmin}" title="${userItem.isAdmin ? 'Remover Admin' : 'Tornar Admin'}">
              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${userItem.isAdmin ? '#D97757' : 'currentColor'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
              </svg>
           </button>
-          <button class="cc-action-btn user-btn-delete" data-uid="${userItem.uid}" title="Excluir Usuário">
+          <button class="cc-action-btn user-btn-delete" data-uid="${escapeHtml(userItem.uid)}" title="Excluir Usuário">
              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                <path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6"/>
              </svg>
           </button>
         </div>
-        <!-- Mobile: menu de 3 pontos -->
         <div class="cc-mobile-actions" style="position:relative;">
-          <button id="user-mob-${userItem.uid}" class="cc-action-btn user-mob-trigger"
-                  data-user='${JSON.stringify(userItem).replace(/'/g, "&#39;")}'
-                  data-uid="${userItem.uid}" data-is-admin="${userItem.isAdmin}" title="Opções">
+          <button id="user-mob-${escapeHtml(userItem.uid)}" class="cc-action-btn user-mob-trigger"
+                  data-user='${safeJsonAttr(userItem)}'
+                  data-uid="${escapeHtml(userItem.uid)}" data-is-admin="${userItem.isAdmin}" title="Opções">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none">
               <circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>
             </svg>
           </button>
           ${GenericDropdown({
-            id: `user-mob-${userItem.uid}`,
-            width: '180px',
-            items: [
-              {
-                id: `user-mi-info-${userItem.uid}`,
-                label: 'Ver Informações',
-                icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>',
-              },
-              {
-                id: `user-mi-adm-${userItem.uid}`,
-                label: userItem.isAdmin ? 'Remover Admin' : 'Tornar Admin',
-                icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${userItem.isAdmin ? '#D97757' : 'currentColor'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
-              },
-              {
-                id: `user-mi-del-${userItem.uid}`,
-                label: 'Excluir Usuário',
-                icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6"/></svg>',
-                variant: 'danger',
-              },
-            ],
-          })}
+    id: `user-mob-${userItem.uid}`,
+    width: '180px',
+    items: [
+      {
+        id: `user-mi-info-${userItem.uid}`,
+        label: 'Ver Informações',
+        icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>',
+      },
+      {
+        id: `user-mi-adm-${userItem.uid}`,
+        label: userItem.isAdmin ? 'Remover Admin' : 'Tornar Admin',
+        icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${userItem.isAdmin ? '#D97757' : 'currentColor'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
+      },
+      {
+        id: `user-mi-del-${userItem.uid}`,
+        label: 'Excluir Usuário',
+        icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6"/></svg>',
+        variant: 'danger',
+      },
+    ],
+  })}
         </div>
       </td>
     </tr>
@@ -436,7 +1138,7 @@ function renderTableContent(users: any[]): string {
   if (users.length === 0) {
     return `
       <tr>
-        <td colspan="7" style="padding:60px 0;text-align:center;border:none;color:var(--color-text-secondary);font-size:13px;">
+        <td colspan="5" style="padding:60px 0;text-align:center;border:none;color:var(--color-text-secondary);font-size:13px;">
           Nenhum usuário encontrado com este filtro.
         </td>
       </tr>
@@ -448,61 +1150,325 @@ function renderTableContent(users: any[]): string {
 let allUsersGlobal: any[] = [];
 let filteredUsersGlobal: any[] = [];
 
-const filters1: FilterOption[] = [
-  { id: 'all_status',   label: 'Todos Status' },
-  { id: 'active_subs',  label: 'Pagantes' },
-  { id: 'stripe_canceled', label: 'Cancelaram Stripe' },
+const originFilters: FilterOption[] = [
+  { id: 'all_origins', label: 'Todos' },
+  { id: 'mobile', label: 'Celular' },
+  { id: 'android', label: 'Android' },
+  { id: 'apple', label: 'Apple' },
+  { id: 'web', label: 'Web' },
+  { id: 'unknown', label: 'Não Informado' },
 ];
 
-const filters2: FilterOption[] = [
-  { id: 'all_providers', label: 'Todos Provedores' },
-  { id: 'stripe',        label: 'Stripe' },
-  { id: 'asaas',         label: 'Asaas' },
+const trialStatusFilters: FilterOption[] = [
+  { id: 'all_trial_status', label: 'Todos trials' },
+  { id: 'trial_active', label: 'Trial ativo' },
+  { id: 'trial_expired', label: 'Trial expirado' },
+  { id: 'trial_converted', label: 'Convertido' },
+  { id: 'trial_none', label: 'Sem trial' },
 ];
 
-const filters3: FilterOption[] = [
-  { id: 'all',          label: 'Todos Usuários' },
-  { id: 'admins',       label: 'Admins' },
+const subscriptionStatusFilters: FilterOption[] = [
+  { id: 'all_subscription_status', label: 'Todos' },
+  { id: 'subscription_active', label: 'Ativos' },
+  { id: 'subscription_inactive', label: 'Inativos' },
 ];
 
-const storedFilter1 = localStorage.getItem('admin_filter_status') || 'all_status';
-// Migracao: o filtro 'pro' foi removido. Se ainda estiver salvo no localStorage, limpa e cai pra 'all_status'.
-let activeFilter1 = storedFilter1 === 'pro' ? 'all_status' : storedFilter1;
-if (storedFilter1 === 'pro') {
-  localStorage.setItem('admin_filter_status', 'all_status');
+const trialDaysFilters: FilterOption[] = [
+  { id: 'all_trial_days', label: 'Todos' },
+  { id: 'trial_days_7', label: '7 dias' },
+  { id: 'trial_days_3', label: '3 dias' },
+  { id: 'trial_days_expired', label: 'Expirado' },
+  { id: 'trial_days_none', label: 'Sem trial' },
+];
+
+const lastAccessFilters: FilterOption[] = [
+  { id: 'all_last_access', label: 'Todos' },
+  { id: 'last_access_7', label: '7 dias' },
+  { id: 'last_access_30', label: '30 dias' },
+  { id: 'last_access_old', label: '+30 dias' },
+  { id: 'last_access_never', label: 'Nunca entrou' },
+];
+
+const bankFilters: FilterOption[] = [
+  { id: 'all_bank_status', label: 'Todos bancos' },
+  { id: 'without_bank', label: 'Sem conexão' },
+  { id: 'with_bank', label: 'Com conexão' },
+];
+
+const activeSubscriptionFilters: FilterOption[] = [
+  { id: 'all_active_subscription', label: 'Todos' },
+  { id: 'only_active_subscription', label: 'Assinatura Ativa' },
+  { id: 'without_active_subscription', label: 'Outros' },
+];
+
+let activeOriginFilter = localStorage.getItem('admin_growth_filter_origin') || 'all_origins';
+let activeTrialStatusFilter = localStorage.getItem('admin_growth_filter_trial_status') || 'all_trial_status';
+let activeSubscriptionStatusFilter = localStorage.getItem('admin_growth_filter_subscription_status') || 'all_subscription_status';
+let activeTrialDaysFilter = localStorage.getItem('admin_growth_filter_trial_days') || 'all_trial_days';
+let activeLastAccessFilter = localStorage.getItem('admin_growth_filter_last_access') || 'all_last_access';
+let activeBankFilter = localStorage.getItem('admin_growth_filter_bank') || 'all_bank_status';
+let activeSubscriptionActiveFilter = localStorage.getItem('admin_growth_filter_active_subscription') || 'all_active_subscription';
+let filterSelectorControls: Record<string, { setFilterId: (filterId: string) => void }> = {};
+
+function resetGrowthFilters(): void {
+  const defaults = {
+    origin: 'all_origins',
+    trialStatus: 'all_trial_status',
+    subscriptionStatus: 'all_subscription_status',
+    trialDays: 'all_trial_days',
+    lastAccess: 'all_last_access',
+    bank: 'all_bank_status',
+    activeSubscription: 'all_active_subscription',
+  };
+
+  activeOriginFilter = defaults.origin;
+  activeTrialStatusFilter = defaults.trialStatus;
+  activeSubscriptionStatusFilter = defaults.subscriptionStatus;
+  activeTrialDaysFilter = defaults.trialDays;
+  activeLastAccessFilter = defaults.lastAccess;
+  activeBankFilter = defaults.bank;
+  activeSubscriptionActiveFilter = defaults.activeSubscription;
+
+  filterSelectorControls.origin?.setFilterId(defaults.origin);
+  filterSelectorControls.trialStatus?.setFilterId(defaults.trialStatus);
+  filterSelectorControls.subscriptionStatus?.setFilterId(defaults.subscriptionStatus);
+  filterSelectorControls.trialDays?.setFilterId(defaults.trialDays);
+  filterSelectorControls.lastAccess?.setFilterId(defaults.lastAccess);
+  filterSelectorControls.bank?.setFilterId(defaults.bank);
+  filterSelectorControls.activeSubscription?.setFilterId(defaults.activeSubscription);
+
+  applyFilterAndRender();
 }
-let activeFilter2 = localStorage.getItem('admin_filter_provider') || 'all_providers';
-let activeFilter3 = localStorage.getItem('admin_filter_access') || 'all';
+
+function exportText(value: any): string {
+  return String(value ?? '').replace(/\s+/g, ' ').trim();
+}
+
+function formatExportDate(value: string | null | undefined): string {
+  if (!value) return '';
+  const formatted = fmtDate(value);
+  return formatted === 'Data não disponível' ? '' : formatted;
+}
+
+function getTrialDaysExportText(userItem: any): string {
+  const daysRemaining = getTrialDaysRemaining(userItem);
+
+  if (isConvertedClient(userItem)) return 'Pago';
+  if (daysRemaining === null) return '';
+  if (daysRemaining < 0) {
+    const absDays = Math.abs(daysRemaining);
+    return `Expirado ha ${absDays} dia${absDays !== 1 ? 's' : ''}`;
+  }
+
+  return `${daysRemaining} dia${daysRemaining !== 1 ? 's' : ''}`;
+}
+
+function getTrialDurationExportText(userItem: any): string {
+  const duration = getTrialDurationDays(userItem);
+  return duration ? `${duration} dia${duration !== 1 ? 's' : ''}` : '';
+}
+
+function getBankExportText(userItem: any): string {
+  if (userItem.bankDataUnavailable === true) return 'Sem dados';
+  const bankCount = getConnectedBankCount(userItem);
+  if (bankCount === 0) return '0 bancos';
+
+  const names = Array.isArray(userItem.connectedBankNames) ? userItem.connectedBankNames : [];
+  const accounts = Number(userItem.connectedAccountCount || 0);
+  const bankNames = names.length ? names.join(', ') : `${bankCount} banco${bankCount !== 1 ? 's' : ''}`;
+  return accounts ? `${bankNames} / ${accounts} conta${accounts !== 1 ? 's' : ''}` : bankNames;
+}
+
+function getLastAccessExportText(userItem: any): string {
+  const relative = fmtRelativeTime(userItem.lastLogin).text;
+  const date = formatExportDate(userItem.lastLogin);
+  return date ? `${relative} (${date})` : relative;
+}
+
+function getGatewayVerificationExportText(userItem: any): string {
+  const provider = normalizeProviderKey(userItem.provider);
+  if (!isVerifiableProvider(provider)) return 'Não aplicável';
+  if (userItem.isVerified === true) return `Verificado (${providerName(provider)})`;
+  if (userItem.verificationUnavailable === true) return 'Indisponível';
+  if (userItem.isVerified === undefined) return 'Pendente';
+  return 'Não verificado';
+}
+
+function buildGrowthExportRows(users: any[]): string[][] {
+  return users.map((userItem) => [
+    exportText(userItem.name || userItem.email || userItem.uid),
+    exportText(userItem.email || ''),
+    exportText(getSignupPlatformLabel(userItem)),
+    trialStatusLabel(getTrialStatusKey(userItem)),
+    subscriptionStatusLabel(getSubscriptionStatusKey(userItem)),
+    getTrialDaysExportText(userItem),
+    getLastAccessExportText(userItem),
+    getBankExportText(userItem),
+    getGatewayVerificationExportText(userItem),
+  ]);
+}
+
+function exportGrowthTableToExcel(): void {
+  const rows = filteredUsersGlobal.length ? filteredUsersGlobal : allUsersGlobal;
+  if (!rows.length) {
+    toaster.create({
+      title: 'Nada para exportar',
+      description: 'A tabela ainda não tem usuários carregados.',
+      type: 'message'
+    });
+    return;
+  }
+
+  const headers = [
+    'Nome',
+    'Email',
+    'Origem',
+    'Status trial',
+    'Status cliente',
+    'Dias restantes trial',
+    'Segmentação de acesso',
+    'Segmentação de conexões',
+    'Verificados Gateway',
+  ];
+
+  const tableRows = buildGrowthExportRows(rows);
+  const worksheet = { headers, rows: tableRows };
+  const workbook: { worksheet?: typeof worksheet; sheetName?: string } = {};
+  const XLSX = {
+    utils: {
+      book_append_sheet(target: typeof workbook, sheet: typeof worksheet, sheetName: string) {
+        target.worksheet = sheet;
+        target.sheetName = sheetName;
+      }
+    },
+    writeFile(target: typeof workbook, filename: string) {
+      const sheet = target.worksheet || worksheet;
+      const tableHtml = `
+        <table>
+          <thead>
+            <tr>${sheet.headers.map((header) => `<th>${escapeHtml(header)}</th>`).join('')}</tr>
+          </thead>
+          <tbody>
+            ${sheet.rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`).join('')}
+          </tbody>
+        </table>
+      `;
+      const html = `
+        <!doctype html>
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <style>
+              table { border-collapse: collapse; font-family: Arial, sans-serif; font-size: 12px; }
+              th { background: #f3f4f6; font-weight: 700; }
+              th, td { border: 1px solid #d1d5db; padding: 8px 10px; mso-number-format: "\\@"; }
+            </style>
+          </head>
+          <body>${tableHtml}</body>
+        </html>
+      `;
+      const blob = new Blob(['\ufeff', html], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Usuários');
+
+  // Generate date for filename
+  const date = new Date().toISOString().slice(0, 10);
+
+  // Write workbook to file (XLSX format)
+  XLSX.writeFile(workbook, `gestao-de-usuarios-${date}.xlsx`);
+
+  toaster.create({
+    title: 'Exportado',
+    description: `${rows.length} usuário${rows.length !== 1 ? 's' : ''} enviado${rows.length !== 1 ? 's' : ''} para Excel.`,
+    type: 'success'
+  });
+}
 
 function applyFilterAndRender() {
-    // Save to localStorage
-    localStorage.setItem('admin_filter_status', activeFilter1);
-    localStorage.setItem('admin_filter_provider', activeFilter2);
-    localStorage.setItem('admin_filter_access', activeFilter3);
+  localStorage.setItem('admin_growth_filter_origin', activeOriginFilter);
+  localStorage.setItem('admin_growth_filter_trial_status', activeTrialStatusFilter);
+  localStorage.setItem('admin_growth_filter_subscription_status', activeSubscriptionStatusFilter);
+  localStorage.setItem('admin_growth_filter_trial_days', activeTrialDaysFilter);
+  localStorage.setItem('admin_growth_filter_last_access', activeLastAccessFilter);
+  localStorage.setItem('admin_growth_filter_bank', activeBankFilter);
+  localStorage.setItem('admin_growth_filter_active_subscription', activeSubscriptionActiveFilter);
+
   const tbody = document.querySelector('.cc-table tbody');
   const countSpan = document.querySelector('.cc-table-count');
   if (!tbody) return;
 
   filteredUsersGlobal = allUsersGlobal.filter((u: any) => {
-    // Filtro do Grupo 1 (Status)
-    const match1 = activeFilter1 === 'all_status' ||
-                   (activeFilter1 === 'active_subs' && isPayingClient(u)) ||
-                   (activeFilter1 === 'stripe_canceled' && hasStripeCancellation(u));
+    const platform = getSignupPlatform(u);
+    const trialStatus = getTrialStatusKey(u);
+    const subscriptionStatus = getSubscriptionStatusKey(u);
+    const trialDays = getTrialDaysRemaining(u);
+    const trialDuration = getTrialDurationDays(u);
+    const accessDays = getLastAccessDays(u);
+    const bankDataUnavailable = u.bankDataUnavailable === true;
 
-    // Filtro do Grupo 2 (Provedor)
-    const match2 = activeFilter2 === 'all_providers' || u.provider === activeFilter2;
+    const matchOrigin = activeOriginFilter === 'all_origins' ||
+      (activeOriginFilter === 'mobile' && isMobileSignup(u)) ||
+      (activeOriginFilter === 'unknown' && platform === 'unknown' && !isMobileSignup(u)) ||
+      (activeOriginFilter === 'apple' && (platform === 'iphone' || platform === 'apple_iap')) ||
+      platform === activeOriginFilter;
 
-    // Filtro do Grupo 3 (Geral/Admin)
-    const match3 = activeFilter3 === 'all' || (activeFilter3 === 'admins' && u.isAdmin === true);
+    const matchTrialStatus = activeTrialStatusFilter === 'all_trial_status' ||
+      (activeTrialStatusFilter === 'trial_active' && trialStatus === 'active') ||
+      (activeTrialStatusFilter === 'trial_expired' && trialStatus === 'expired') ||
+      (activeTrialStatusFilter === 'trial_converted' && trialStatus === 'converted') ||
+      (activeTrialStatusFilter === 'trial_none' && trialStatus === 'none');
 
-    return match1 && match2 && match3;
+    const isActiveOrTrial = subscriptionStatus === 'active' || subscriptionStatus === 'trialing';
+    const matchSubscriptionStatus = activeSubscriptionStatusFilter === 'all_subscription_status' ||
+      (activeSubscriptionStatusFilter === 'subscription_active' && isActiveOrTrial) ||
+      (activeSubscriptionStatusFilter === 'subscription_inactive' && !isActiveOrTrial);
+
+    const matchTrialDays = activeTrialDaysFilter === 'all_trial_days' ||
+      (activeTrialDaysFilter === 'trial_days_3' && trialStatus === 'active' && trialDays !== null && trialDays >= 0 && trialDays <= 3) ||
+      (activeTrialDaysFilter === 'trial_days_7' && trialDuration === 7) ||
+      (activeTrialDaysFilter === 'trial_days_expired' && trialStatus === 'expired' && trialDays !== null && trialDays < 0) ||
+      (activeTrialDaysFilter === 'trial_days_none' && !hasTrialHistory(u));
+
+    const matchLastAccess = activeLastAccessFilter === 'all_last_access' ||
+      (activeLastAccessFilter === 'last_access_7' && accessDays !== null && accessDays <= 7) ||
+      (activeLastAccessFilter === 'last_access_30' && accessDays !== null && accessDays <= 30) ||
+      (activeLastAccessFilter === 'last_access_old' && accessDays !== null && accessDays > 30) ||
+      (activeLastAccessFilter === 'last_access_never' && accessDays === null);
+
+    const matchBank = activeBankFilter === 'all_bank_status' ||
+      bankDataUnavailable ||
+      (activeBankFilter === 'without_bank' && !hasConnectedBank(u)) ||
+      (activeBankFilter === 'with_bank' && hasConnectedBank(u));
+
+    const matchActiveSubscription = activeSubscriptionActiveFilter === 'all_active_subscription' ||
+      subscriptionStatus === 'error' ||
+      (activeSubscriptionActiveFilter === 'only_active_subscription' && isPayingClient(u)) ||
+      (activeSubscriptionActiveFilter === 'without_active_subscription' && !isPayingClient(u));
+
+    return matchOrigin &&
+      matchTrialStatus &&
+      matchSubscriptionStatus &&
+      matchTrialDays &&
+      matchLastAccess &&
+      matchBank &&
+      matchActiveSubscription;
   });
 
   tbody.innerHTML = renderTableContent(filteredUsersGlobal);
   if (countSpan) {
     countSpan.textContent = `${filteredUsersGlobal.length} usuário${filteredUsersGlobal.length !== 1 ? 's' : ''}`;
   }
-  updateTableSummary(filteredUsersGlobal);
+  updateGrowthKpis(filteredUsersGlobal);
 
   // Re-render Avvvatars
   document.querySelectorAll('.avvvatar-target').forEach(el => {
@@ -516,119 +1482,126 @@ function applyFilterAndRender() {
 }
 
 function attachUserActionListeners() {
-    document.querySelectorAll('.user-btn-info').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const u = JSON.parse(btn.getAttribute('data-user') || '{}');
-        showUserModal(u);
+  document.querySelectorAll('.user-btn-info').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const u = JSON.parse(btn.getAttribute('data-user') || '{}');
+      showUserModal(u);
+    });
+  });
+
+  document.querySelectorAll('.user-btn-funnel').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const u = JSON.parse(btn.getAttribute('data-user') || '{}');
+      showFunnelModal(u);
+    });
+  });
+
+  document.querySelectorAll('.user-btn-admin').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const uid = btn.getAttribute('data-uid');
+      const currentState = btn.getAttribute('data-is-admin') === 'true';
+      const action = currentState ? 'Remover Admin' : 'Tornar Admin';
+      DeleteConfirmationModal({
+        title: action,
+        description: currentState
+          ? 'Tem certeza que deseja remover a permissão de administrador deste usuário?'
+          : 'Tem certeza que deseja conceder permissão de administrador a este usuário?',
+        onConfirm: async () => {
+          const uState = auth.currentUser;
+          if (!uState) throw new Error('Não autenticado.');
+          const t = await uState.getIdToken();
+          const r = await fetch(`${API_BASE}/api/admin/users/${uid}/toggle-admin`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+            body: JSON.stringify({ isAdmin: !currentState })
+          });
+          if (!r.ok) throw new Error('Falha ao alterar perfil de admin.');
+          toaster.create({ title: 'Sucesso', description: 'Permissão de administrador atualizada.', type: 'success' });
+          loadSubscriptions();
+        }
+      });
+    });
+  });
+
+  document.querySelectorAll('.user-btn-delete').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const uid = btn.getAttribute('data-uid');
+      DeleteConfirmationModal({
+        title: 'Excluir Usuário',
+        description: 'Esta ação é irreversível. O usuário será removido do banco de dados e do authentication.',
+        onConfirm: async () => {
+          const uState = auth.currentUser;
+          if (!uState) throw new Error('Não autenticado.');
+          const t = await uState.getIdToken();
+          const r = await fetch(`${API_BASE}/api/admin/users/${uid}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${t}` }
+          });
+          const ans = await r.json();
+          if (!r.ok) throw new Error(ans.error || 'Falha ao excluir o usuário.');
+          toaster.create({ title: 'Sucesso', description: 'Usuário excluído definitivamente.', type: 'success' });
+          loadSubscriptions();
+        }
+      });
+    });
+  });
+
+  // Mobile: menu 3 pontos
+  document.querySelectorAll('.user-mob-trigger').forEach(trigBtn => {
+    const uid = trigBtn.getAttribute('data-uid');
+    if (!uid) return;
+
+    attachGenericDropdownListeners(`user-mob-${uid}`, `user-mob-${uid}`);
+
+    document.getElementById(`user-mi-info-${uid}`)?.addEventListener('click', () => {
+      const u = JSON.parse(trigBtn.getAttribute('data-user') || '{}');
+      showUserModal(u);
+    });
+
+    document.getElementById(`user-mi-adm-${uid}`)?.addEventListener('click', () => {
+      const currentState = trigBtn.getAttribute('data-is-admin') === 'true';
+      const action = currentState ? 'Remover Admin' : 'Tornar Admin';
+      DeleteConfirmationModal({
+        title: action,
+        description: currentState
+          ? 'Tem certeza que deseja remover a permissão de administrador deste usuário?'
+          : 'Tem certeza que deseja conceder permissão de administrador a este usuário?',
+        onConfirm: async () => {
+          const uState = auth.currentUser;
+          if (!uState) throw new Error('Não autenticado.');
+          const t = await uState.getIdToken();
+          const r = await fetch(`${API_BASE}/api/admin/users/${uid}/toggle-admin`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+            body: JSON.stringify({ isAdmin: !currentState })
+          });
+          if (!r.ok) throw new Error('Falha ao alterar perfil de admin.');
+          toaster.create({ title: 'Sucesso', description: 'Permissão de administrador atualizada.', type: 'success' });
+          loadSubscriptions();
+        }
       });
     });
 
-    document.querySelectorAll('.user-btn-admin').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const uid = btn.getAttribute('data-uid');
-        const currentState = btn.getAttribute('data-is-admin') === 'true';
-        const action = currentState ? 'Remover Admin' : 'Tornar Admin';
-        DeleteConfirmationModal({
-          title: action,
-          description: currentState
-            ? 'Tem certeza que deseja remover a permissão de administrador deste usuário?'
-            : 'Tem certeza que deseja conceder permissão de administrador a este usuário?',
-          onConfirm: async () => {
-            const uState = auth.currentUser;
-            if (!uState) throw new Error('Não autenticado.');
-            const t = await uState.getIdToken();
-            const r = await fetch(`${API_BASE}/api/admin/users/${uid}/toggle-admin`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
-              body: JSON.stringify({ isAdmin: !currentState })
-            });
-            if (!r.ok) throw new Error('Falha ao alterar perfil de admin.');
-            toaster.create({ title: 'Sucesso', description: 'Permissão de administrador atualizada.', type: 'success' });
-            loadSubscriptions();
-          }
-        });
+    document.getElementById(`user-mi-del-${uid}`)?.addEventListener('click', () => {
+      DeleteConfirmationModal({
+        title: 'Excluir Usuário',
+        description: 'Esta ação é irreversível. O usuário será removido do banco de dados e do authentication.',
+        onConfirm: async () => {
+          const uState = auth.currentUser;
+          if (!uState) throw new Error('Não autenticado.');
+          const t = await uState.getIdToken();
+          const r = await fetch(`${API_BASE}/api/admin/users/${uid}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${t}` }
+          });
+          const ans = await r.json();
+          if (!r.ok) throw new Error(ans.error || 'Falha ao excluir o usuário.');
+          toaster.create({ title: 'Sucesso', description: 'Usuário excluído definitivamente.', type: 'success' });
+          loadSubscriptions();
+        }
       });
     });
-
-    document.querySelectorAll('.user-btn-delete').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const uid = btn.getAttribute('data-uid');
-        DeleteConfirmationModal({
-          title: 'Excluir Usuário',
-          description: 'Esta ação é irreversível. O usuário será removido do banco de dados e do authentication.',
-          onConfirm: async () => {
-            const uState = auth.currentUser;
-            if (!uState) throw new Error('Não autenticado.');
-            const t = await uState.getIdToken();
-            const r = await fetch(`${API_BASE}/api/admin/users/${uid}`, {
-              method: 'DELETE',
-              headers: { Authorization: `Bearer ${t}` }
-            });
-            const ans = await r.json();
-            if (!r.ok) throw new Error(ans.error || 'Falha ao excluir o usuário.');
-            toaster.create({ title: 'Sucesso', description: 'Usuário excluído definitivamente.', type: 'success' });
-            loadSubscriptions();
-          }
-        });
-      });
-    });
-
-    // Mobile: menu 3 pontos
-    document.querySelectorAll('.user-mob-trigger').forEach(trigBtn => {
-      const uid = trigBtn.getAttribute('data-uid');
-      if (!uid) return;
-
-      attachGenericDropdownListeners(`user-mob-${uid}`, `user-mob-${uid}`);
-
-      document.getElementById(`user-mi-info-${uid}`)?.addEventListener('click', () => {
-        const u = JSON.parse(trigBtn.getAttribute('data-user') || '{}');
-        showUserModal(u);
-      });
-
-      document.getElementById(`user-mi-adm-${uid}`)?.addEventListener('click', () => {
-        const currentState = trigBtn.getAttribute('data-is-admin') === 'true';
-        const action = currentState ? 'Remover Admin' : 'Tornar Admin';
-        DeleteConfirmationModal({
-          title: action,
-          description: currentState
-            ? 'Tem certeza que deseja remover a permissão de administrador deste usuário?'
-            : 'Tem certeza que deseja conceder permissão de administrador a este usuário?',
-          onConfirm: async () => {
-            const uState = auth.currentUser;
-            if (!uState) throw new Error('Não autenticado.');
-            const t = await uState.getIdToken();
-            const r = await fetch(`${API_BASE}/api/admin/users/${uid}/toggle-admin`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
-              body: JSON.stringify({ isAdmin: !currentState })
-            });
-            if (!r.ok) throw new Error('Falha ao alterar perfil de admin.');
-            toaster.create({ title: 'Sucesso', description: 'Permissão de administrador atualizada.', type: 'success' });
-            loadSubscriptions();
-          }
-        });
-      });
-
-      document.getElementById(`user-mi-del-${uid}`)?.addEventListener('click', () => {
-        DeleteConfirmationModal({
-          title: 'Excluir Usuário',
-          description: 'Esta ação é irreversível. O usuário será removido do banco de dados e do authentication.',
-          onConfirm: async () => {
-            const uState = auth.currentUser;
-            if (!uState) throw new Error('Não autenticado.');
-            const t = await uState.getIdToken();
-            const r = await fetch(`${API_BASE}/api/admin/users/${uid}`, {
-              method: 'DELETE',
-              headers: { Authorization: `Bearer ${t}` }
-            });
-            const ans = await r.json();
-            if (!r.ok) throw new Error(ans.error || 'Falha ao excluir o usuário.');
-            toaster.create({ title: 'Sucesso', description: 'Usuário excluído definitivamente.', type: 'success' });
-            loadSubscriptions();
-          }
-        });
-      });
-    });
+  });
 }
 
 function renderNonPayingProRows(candidates: any[]): string {
@@ -764,8 +1737,8 @@ async function handleDowngradeNonPaying(): Promise<void> {
         <div class="np-modal-header">
           <p style="font-size:13px;color:var(--color-text-secondary);line-height:1.5;margin:0;">
             ${count === 0
-              ? 'Nenhum usuário PRO sem assinatura ativa encontrado.'
-              : `<strong style="color:var(--color-text);">${count}</strong> usuário${count !== 1 ? 's' : ''} com plano PRO no Firestore <strong>sem assinatura ativa</strong> no Stripe/Asaas. Desmarque quem você quer preservar. Admins já são preservados automaticamente.`}
+        ? 'Nenhum usuário PRO sem assinatura ativa encontrado.'
+        : `<strong style="color:var(--color-text);">${count}</strong> usuário${count !== 1 ? 's' : ''} com plano PRO no Firestore <strong>sem assinatura ativa</strong> no Stripe/Asaas. Desmarque quem você quer preservar. Admins já são preservados automaticamente.`}
           </p>
         </div>
         ${count > 0 ? `
@@ -913,6 +1886,81 @@ async function handleDowngradeNonPaying(): Promise<void> {
   }
 }
 
+async function fetchAdminJson(path: string, token: string): Promise<any> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || 'Erro desconhecido');
+  }
+
+  return res.json();
+}
+
+function attachAdminFilterScroller(): void {
+  const scroller = document.querySelector<HTMLElement>('.admin-filters-scroller');
+  if (!scroller) return;
+
+  let isPointerDown = false;
+  let hasMoved = false;
+  let startX = 0;
+  let startScrollLeft = 0;
+  let suppressClickUntil = 0;
+
+  const endDrag = () => {
+    if (!isPointerDown) return;
+    isPointerDown = false;
+    scroller.classList.remove('is-grabbing');
+
+    if (hasMoved) {
+      suppressClickUntil = Date.now() + 120;
+    }
+    scroller.classList.remove('is-dragging');
+  };
+
+  scroller.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0) return;
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('.filter-nav-btn')) return;
+
+    isPointerDown = true;
+    hasMoved = false;
+    startX = event.clientX;
+    startScrollLeft = scroller.scrollLeft;
+    scroller.classList.add('is-grabbing');
+    scroller.setPointerCapture?.(event.pointerId);
+  });
+
+  scroller.addEventListener('pointermove', (event) => {
+    if (!isPointerDown) return;
+    const deltaX = event.clientX - startX;
+    if (Math.abs(deltaX) <= 4) return;
+
+    hasMoved = true;
+    scroller.classList.add('is-dragging');
+    scroller.scrollLeft = startScrollLeft - deltaX;
+    event.preventDefault();
+  });
+
+  scroller.addEventListener('pointerup', endDrag);
+  scroller.addEventListener('pointercancel', endDrag);
+  scroller.addEventListener('lostpointercapture', endDrag);
+
+  scroller.addEventListener('click', (event) => {
+    if (Date.now() > suppressClickUntil) return;
+    event.preventDefault();
+    event.stopPropagation();
+  }, true);
+
+  scroller.addEventListener('wheel', (event) => {
+    if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+    scroller.scrollLeft += event.deltaY;
+    event.preventDefault();
+  }, { passive: false });
+}
+
 async function loadSubscriptions(): Promise<void> {
   const container = document.getElementById('admin-subscriptions-content-area');
   if (!container) return;
@@ -931,41 +1979,26 @@ async function loadSubscriptions(): Promise<void> {
     if (!user) throw new Error('Não autenticado.');
     const token = await user.getIdToken();
 
-    const res = await fetch(`${API_BASE}/api/admin/users`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    const [data, pluggyData] = await Promise.all([
+      fetchAdminJson('/api/admin/users', token),
+      fetchAdminJson('/api/admin/pluggy-sync', token).catch((pluggyErr) => {
+        console.warn('[AdminSubscriptions] erro ao buscar Pluggy:', pluggyErr);
+        return null;
+      })
+    ]);
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: res.statusText }));
-      throw new Error(err.error || 'Erro desconhecido');
-    }
-
-    const data = await res.json();
     allUsersGlobal = data.users || [];
+    mergePluggyRowsIntoUsers(allUsersGlobal, pluggyData?.rows || [], !pluggyData);
     filteredUsersGlobal = [...allUsersGlobal];
 
     container.innerHTML = `
+      ${renderGrowthKpis(allUsersGlobal)}
       <div class="cc-table-wrapper">
         <div class="cc-table-header">
           <div class="cc-table-header-left">
-            <span class="cc-table-header-title">Controle de Usuários</span>
+            <span class="cc-table-header-title">Funil trial → banco</span>
           </div>
           <div class="cc-table-header-right">
-            <div class="cc-table-kpis" aria-label="Resumo de clientes ativos">
-              <div class="cc-table-kpi" title="Usuários com assinatura active ou trialing verificada ao vivo no Stripe ou Asaas. Mesma fonte do Painel Administrativo.">
-                <span class="cc-table-kpi-label">Pagantes</span>
-                <strong class="cc-table-kpi-value cc-active-client-count">0 clientes</strong>
-              </div>
-              <div class="cc-table-kpi" title="Soma do valor mensal real cobrado no provedor para os assinantes ativos.">
-                <span class="cc-table-kpi-label">Receita/mês</span>
-                <strong class="cc-table-kpi-value cc-active-revenue">${moneyFormatter.format(0)}</strong>
-              </div>
-              <div class="cc-table-kpi" title="Usuarios Stripe com cancelamento solicitado. Se ainda estiverem active/trialing, continuam no MRR ate o fim do periodo pago.">
-                <span class="cc-table-kpi-label">Cancelaram Stripe</span>
-                <strong class="cc-table-kpi-value cc-stripe-cancel-count">0 usuarios</strong>
-              </div>
-            </div>
-            <div class="cc-header-sep"></div>
             <div id="verify-loading-indicator" style="display:none;align-items:center;gap:5px;">
               <div class="cc-spinner-xs"></div>
               <span style="font-size:11px;color:var(--color-text-secondary);">Buscando dados verificados…</span>
@@ -991,12 +2024,10 @@ async function loadSubscriptions(): Promise<void> {
           <table class="cc-table">
             <thead>
               <tr>
-                <th>Usuário</th>
-                <th>Acesso</th>
-                <th>Plano</th>
-                <th>Sistema / Provedor</th>
-                <th>Atividade</th>
-                <th>Criado em</th>
+                <th>Nome</th>
+                <th>Funil</th>
+                <th>Bancos conectados</th>
+                <th>Último acesso</th>
                 <th style="text-align:right;">Ações</th>
               </tr>
             </thead>
@@ -1042,6 +2073,15 @@ async function loadSubscriptions(): Promise<void> {
         endedAtDate?: string | null;
         currentPeriodEnd?: string | null;
         nextBillingDate?: string | null;
+        stripeStatus?: string | null;
+        appleStatus?: string | null;
+        googlePlayStatus?: string | null;
+        trialStatus?: string | null;
+        trialDays?: number | null;
+        trialStartedAt?: string | null;
+        trialStartedDate?: string | null;
+        trialEndsAt?: string | null;
+        trialEndsDate?: string | null;
       };
       const payingUsers: Array<PayingUserInfo> = statsData.payingUsers || [];
 
@@ -1051,8 +2091,9 @@ async function loadSubscriptions(): Promise<void> {
       if (providerErrors.length) {
         toaster.create({
           title: 'Verificacao parcial',
-          description: `Nao foi possivel consultar ${providerErrorsText(providerErrors)} agora.`,
-          type: 'warning'
+          description: `Nao foi possivel consultar ${providerErrorsText(providerErrors)} agora. Usuarios afetados estao marcados com "erro sync".`,
+          type: 'warning',
+          duration: 8000
         });
       }
 
@@ -1061,9 +2102,18 @@ async function loadSubscriptions(): Promise<void> {
         if (info) {
           u.verificationUnavailable = false;
           u.isVerified = true;
-          u.isPaying = ['active', 'trialing'].includes(normalizeValue(info.status));
+          u.isPaying = normalizeValue(info.status) === 'active';
           u.providerStatus = info.status;
           u.verifiedMonthlyAmount = info.monthlyAmount;
+          u.stripeStatus = info.stripeStatus ?? u.stripeStatus;
+          u.appleStatus = info.appleStatus ?? u.appleStatus;
+          u.googlePlayStatus = info.googlePlayStatus ?? u.googlePlayStatus;
+          u.trialStatus = info.trialStatus ?? u.trialStatus;
+          u.trialDays = info.trialDays ?? u.trialDays;
+          u.trialStartedAt = info.trialStartedAt ?? u.trialStartedAt;
+          u.trialStartedDate = info.trialStartedDate ?? u.trialStartedDate;
+          u.trialEndsAt = info.trialEndsAt ?? u.trialEndsAt;
+          u.trialEndsDate = info.trialEndsDate ?? u.trialEndsDate;
           u.cancelAtPeriodEnd = info.cancelAtPeriodEnd ?? u.cancelAtPeriodEnd;
           u.canceledAt = info.canceledAt ?? u.canceledAt;
           u.canceledAtDate = info.canceledAtDate ?? u.canceledAtDate;
@@ -1095,7 +2145,7 @@ async function loadSubscriptions(): Promise<void> {
       // Marca provedores externos como verificacao pendente em caso de falha geral.
       allUsersGlobal.forEach((u: any) => {
         if (u.isVerified === undefined) {
-          const isExternalProvider = u.provider === 'stripe' || u.provider === 'asaas';
+          const isExternalProvider = isVerifiableProvider(u.provider);
           u.verificationUnavailable = isExternalProvider;
           u.isVerified = isExternalProvider ? undefined : false;
           u.isPaying = false;
@@ -1124,31 +2174,7 @@ async function loadSubscriptions(): Promise<void> {
 function showUserModal(userItem: any) {
   const modalAvContainerId = `modal-av-${Math.random().toString(36).substr(2, 9)}`;
   const modalTooltipId = `m-v-t-${userItem.uid}`;
-  const targetIcon = userItem.provider === 'asaas' ? verifiedIconAsaas : verifiedIconStripe;
-  let modalVerifyHtml = '';
-  
-  if (userItem.isVerified === true) {
-    modalVerifyHtml = Tooltip({
-      id: modalTooltipId,
-      className: `user-verify-badge-${userItem.uid}`,
-      content: targetIcon,
-      text: `Assinatura verificada no ${userItem.provider === 'asaas' ? 'Asaas' : 'Stripe'}`
-    });
-  } else if (userItem.verificationUnavailable === true && (userItem.provider === 'stripe' || userItem.provider === 'asaas')) {
-    modalVerifyHtml = Tooltip({
-      id: modalTooltipId,
-      className: `user-verify-badge-${userItem.uid}`,
-      content: warningIcon,
-      text: `Nao foi possivel verificar o ${userItem.provider === 'asaas' ? 'Asaas' : 'Stripe'} agora`
-    });
-  } else if (userItem.isVerified === undefined && (userItem.provider === 'stripe' || userItem.provider === 'asaas')) {
-    modalVerifyHtml = Tooltip({
-      id: modalTooltipId,
-      className: `user-verify-badge-${userItem.uid}`,
-      content: loaderIcon,
-      text: `Verificando status no ${userItem.provider === 'asaas' ? 'Asaas' : 'Stripe'}...`
-    });
-  }
+  const modalVerifyHtml = renderUserVerificationBadge(userItem, modalTooltipId);
 
   const content = `
     <div class="px-4 sm:px-8 pt-6 pb-6 border-b border-[var(--color-border)]">
@@ -1181,8 +2207,12 @@ function showUserModal(userItem: any) {
         <span>${fmtDate(userItem.createdAt)}</span>
       </div>
       <div class="flex justify-between items-center px-4 sm:px-8 py-3 border-b border-[var(--color-border)]/50">
+        <span class="text-[var(--color-text-secondary)]">Origem da conta</span>
+        <span class="font-medium">${getSignupPlatformLabel(userItem)}${isMobileSignup(userItem) ? ' / Celular' : ''}</span>
+      </div>
+      <div class="flex justify-between items-center px-4 sm:px-8 py-3 border-b border-[var(--color-border)]/50">
         <span class="text-[var(--color-text-secondary)]">Plano</span>
-        <span class="capitalize font-medium">${userItem.plan === 'pro' ? 'Pro' : 'Sem plano'}</span>
+        <span class="capitalize font-medium">${isTrialClient(userItem) ? `Trial${isSevenDayTrial(userItem) ? ' 7 dias' : ''}` : (isPayingClient(userItem) ? 'Pagante' : 'Sem plano')}</span>
       </div>
       <div class="flex justify-between items-center px-4 sm:px-8 py-3 border-b border-[var(--color-border)]/50">
         <span class="text-[var(--color-text-secondary)]">Acesso</span>
@@ -1191,15 +2221,14 @@ function showUserModal(userItem: any) {
       <div class="flex justify-between items-center px-4 sm:px-8 py-3 border-b border-[var(--color-border)]/50">
         <span class="text-[var(--color-text-secondary)]">Provedor</span>
         <div class="flex items-center gap-2">
-          ${userItem.provider === 'asaas' ? `<img src="/assets/logo/assas.png" class="cc-provider-img" /> <span class="capitalize font-medium">Asaas</span>` : 
-            userItem.provider === 'stripe' ? `<img src="/assets/logo/stripe.png" class="cc-provider-img" /> <span class="capitalize font-medium">Stripe</span>` :
-            `<span class="capitalize font-medium">Sistema / Base</span>`}
+          ${renderProviderLabel(userItem)}
         </div>
       </div>
       ${renderCancellationModalRows(userItem)}
+      ${renderSubscriptionModalTimelineRows(userItem)}
       <div class="flex justify-between items-center px-4 sm:px-8 py-3">
         <span class="text-[var(--color-text-secondary)]">Status (Sistema de Pag.)</span>
-        <span class="capitalize font-medium">${userItem.status === 'unknown' ? 'Não aplicável' : userItem.status}</span>
+        <span class="capitalize font-medium">${getProviderStatus(userItem) === 'unknown' ? 'Nao aplicavel' : getProviderStatus(userItem)}</span>
       </div>
     </div>
   `;
@@ -1257,6 +2286,87 @@ export function renderAdminSubscriptions(user: any) {
         }
         .animate-fadein { animation: fadein 0.25s ease forwards; }
 
+        .growth-kpi-grid {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 12px;
+          margin-bottom: 16px;
+        }
+        .growth-kpi-card {
+          min-width: 0;
+          border: 1px solid var(--color-border);
+          border-radius: 12px;
+          background: var(--color-surface);
+          padding: 14px;
+        }
+        .growth-kpi-head {
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          min-height: 18px;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.08em;
+          color: var(--color-text-secondary);
+        }
+        .growth-kpi-icon {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--color-text);
+          opacity: 0.8;
+          flex-shrink: 0;
+        }
+        .growth-kpi-card strong {
+          display: block;
+          margin-top: 10px;
+          font-size: 24px;
+          font-weight: 650;
+          line-height: 1.05;
+          color: var(--color-text);
+          white-space: nowrap;
+        }
+        .growth-kpi-card small {
+          display: block;
+          margin-top: 7px;
+          font-size: 11.5px;
+          color: var(--color-text-secondary);
+          line-height: 1.3;
+        }
+
+        /* Visual Funnel */
+        .cc-visual-funnel {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 2px;
+          width: 120px;
+        }
+        .cc-funnel-bar {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          height: 20px;
+          font-size: 9px;
+          text-transform: uppercase;
+          font-weight: 800;
+          letter-spacing: 0.05em;
+          color: #ffffff;
+          white-space: nowrap;
+          overflow: hidden;
+          padding: 0 4px;
+        }
+        .cc-funnel-bar-1 { width: 100%; border-radius: 4px 4px 2px 2px; }
+        .cc-funnel-bar-2 { width: 86%; border-radius: 2px; }
+        .cc-funnel-bar-3 { width: 73%; border-radius: 2px; }
+        .cc-funnel-bar-4 { width: 60%; border-radius: 2px 2px 4px 4px; }
+
+        .cc-fbg-origin { background: #64748b; }
+        .cc-fbg-good { background: #10b981; }
+        .cc-fbg-warn { background: #f59e0b; }
+        .cc-fbg-info { background: #3b82f6; }
+        .cc-fbg-muted { background: #94a3b8; }
+
         /* Table wrapper */
         .cc-table-wrapper {
           background: var(--color-surface);
@@ -1285,7 +2395,6 @@ export function renderAdminSubscriptions(user: any) {
         .cc-table-header-title {
           font-size: 10px;
           font-weight: 700;
-          text-transform: uppercase;
           letter-spacing: 0.14em;
           color: var(--color-text-secondary);
         }
@@ -1310,12 +2419,10 @@ export function renderAdminSubscriptions(user: any) {
         .cc-table-kpi-label {
           font-size: 10px;
           font-weight: 700;
-          text-transform: uppercase;
           letter-spacing: 0.1em;
           color: var(--color-text-secondary);
         }
         .cc-table-kpi-value {
-          font-family: 'IBM Plex Mono', monospace;
           font-size: 12px;
           font-weight: 600;
           color: var(--color-text);
@@ -1338,7 +2445,7 @@ export function renderAdminSubscriptions(user: any) {
         /* Table */
         .cc-table {
           width: 100%;
-          min-width: 720px;
+          min-width: 960px;
           border-collapse: separate;
           border-spacing: 0;
         }
@@ -1349,7 +2456,6 @@ export function renderAdminSubscriptions(user: any) {
           padding: 11px 16px;
           font-size: 10.5px;
           font-weight: 600;
-          text-transform: uppercase;
           letter-spacing: 0.07em;
           color: var(--color-text-secondary);
           text-align: left;
@@ -1366,6 +2472,145 @@ export function renderAdminSubscriptions(user: any) {
         .cc-table tbody tr:last-child td { border-bottom: none; }
         .cc-table tbody tr { transition: background 0.15s; }
         .cc-table tbody tr:hover { background: var(--color-surface-hover); }
+
+        .cc-user-main {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          min-width: 210px;
+        }
+        .cc-user-copy,
+        .cc-date-cell,
+        .cc-cell-stack,
+        .cc-bank-cell {
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+          min-width: 0;
+        }
+        .cc-user-name {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-weight: 600;
+          font-size: 13px;
+          line-height: 1.25;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          max-width: 210px;
+        }
+        .cc-user-name > span {
+          min-width: 0;
+          flex: 0 1 auto;
+        }
+        .cc-user-verify-tooltip {
+          flex: 0 0 auto;
+          width: 18px;
+          height: 18px;
+          align-items: center;
+          justify-content: center;
+        }
+        .cc-user-verify-tooltip svg {
+          width: 18px;
+          height: 18px;
+          display: block;
+        }
+        .cc-user-name span,
+        .cc-user-email,
+        .cc-date-cell span,
+        .cc-cell-stack span,
+        .cc-bank-cell span {
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .cc-user-email,
+        .cc-date-cell span,
+        .cc-cell-stack span,
+        .cc-bank-cell span {
+          font-size: 11.5px;
+          color: var(--color-text-secondary);
+          max-width: 220px;
+        }
+        .cc-date-cell strong,
+        .cc-cell-stack strong,
+        .cc-bank-cell strong {
+          font-size: 13px;
+          font-weight: 600;
+          color: var(--color-text);
+          white-space: nowrap;
+        }
+        .cc-cell-warn strong {
+          color: #f59e0b;
+        }
+        .cc-cell-muted strong {
+          color: var(--color-text-secondary);
+        }
+        .cc-status-pill {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 4px;
+          min-width: 82px;
+          height: 24px;
+          padding: 0 9px;
+          border-radius: 999px;
+          border: 1px solid var(--color-border);
+          font-size: 11px;
+          font-weight: 700;
+          white-space: nowrap;
+        }
+        .cc-status-good { color: #22c55e; background: rgba(34, 197, 94, 0.08); border-color: rgba(34, 197, 94, 0.2); }
+        .cc-status-info { color: #38bdf8; background: rgba(56, 189, 248, 0.08); border-color: rgba(56, 189, 248, 0.2); }
+        .cc-status-warn { color: #f59e0b; background: rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.2); }
+        .cc-status-danger { color: #ef4444; background: rgba(239, 68, 68, 0.08); border-color: rgba(239, 68, 68, 0.2); }
+        .cc-status-muted { color: var(--color-text-secondary); background: var(--color-surface-hover); }
+        .cc-status-pill-mini {
+          min-width: 0;
+          height: 22px;
+          padding: 0 8px;
+          font-size: 10.5px;
+          font-weight: 650;
+        }
+        .cc-status-context {
+          opacity: 0.7;
+          font-weight: 700;
+        }
+
+        .cc-funnel-cell {
+          display: flex;
+          flex-direction: row;
+          align-items: center;
+          gap: 6px;
+          flex-wrap: wrap;
+          min-width: 240px;
+          max-width: 360px;
+        }
+        .cc-funnel-origin {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          height: 22px;
+          padding: 0 8px;
+          border-radius: 999px;
+          border: 1px solid var(--color-border);
+          font-size: 11px;
+          font-weight: 650;
+          line-height: 1;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          max-width: 128px;
+        }
+        .cc-funnel-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 999px;
+          background: currentColor;
+          opacity: 0.85;
+          flex-shrink: 0;
+        }
 
         /* Status badge */
         .cc-badge {
@@ -1430,6 +2675,74 @@ export function renderAdminSubscriptions(user: any) {
           background: var(--color-border);
           flex-shrink: 0;
         }
+        .cc-timeline-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          max-width: 172px;
+          height: 24px;
+          padding: 3px 8px;
+          border-radius: 12px;
+          border: 1px solid var(--color-border);
+          background: color-mix(in srgb, var(--color-surface) 86%, transparent);
+          color: var(--color-text-secondary);
+          font-size: 10.5px;
+          font-weight: 600;
+          line-height: 1;
+          white-space: nowrap;
+          overflow: hidden;
+        }
+        .cc-timeline-dot {
+          width: 5px;
+          height: 5px;
+          border-radius: 999px;
+          flex-shrink: 0;
+        }
+        .cc-timeline-trial .cc-timeline-dot {
+          background: #f59e0b;
+          box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.14);
+        }
+        .cc-timeline-paid .cc-timeline-dot {
+          background: #22c55e;
+          box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.14);
+        }
+        .cc-origin-cell {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 3px;
+          min-width: 104px;
+        }
+        .cc-origin-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          height: 24px;
+          padding: 3px 8px;
+          border-radius: 12px;
+          border: 1px solid var(--color-border);
+          font-size: 11px;
+          font-weight: 600;
+          line-height: 1;
+          white-space: nowrap;
+        }
+        .cc-origin-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 999px;
+          background: currentColor;
+          opacity: 0.85;
+        }
+        .cc-origin-source {
+          font-size: 10.5px;
+          color: var(--color-text-secondary);
+          white-space: nowrap;
+        }
+        .cc-origin-android { color: #22c55e; background: rgba(34, 197, 94, 0.08); }
+        .cc-origin-iphone { color: #38bdf8; background: rgba(56, 189, 248, 0.08); }
+        .cc-origin-mobile { color: #f59e0b; background: rgba(245, 158, 11, 0.08); }
+        .cc-origin-desktop { color: var(--color-text-secondary); background: var(--color-surface-hover); }
+        .cc-origin-unknown { color: var(--color-text-secondary); background: transparent; }
 
         /* Category / provider pill */
         .cc-category {
@@ -1533,17 +2846,111 @@ export function renderAdminSubscriptions(user: any) {
         /* Filter chips container */
         .admin-filters-scroller {
           display: flex;
+          flex: 1 1 auto;
           gap: 8px;
+          min-width: 0;
+          max-width: 100%;
           overflow-x: auto;
           scrollbar-width: none;
           -ms-overflow-style: none;
           padding: 4px 2px;
           margin: -4px -2px;
+          cursor: grab;
+          user-select: none;
+          touch-action: pan-x;
+          -webkit-overflow-scrolling: touch;
         }
         .admin-filters-scroller::-webkit-scrollbar { display: none; }
+        .admin-filters-scroller.is-grabbing {
+          cursor: grabbing;
+        }
+        .admin-filters-scroller.is-dragging * {
+          pointer-events: none;
+        }
+        .admin-filters-wrap {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          min-width: 0;
+          flex: 1 1 auto;
+          width: 100%;
+        }
+        .admin-growth-toolbar {
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+          margin-bottom: 18px;
+        }
+        .admin-growth-title h2 {
+          margin: 0;
+        }
+        .admin-growth-title p {
+          max-width: 620px;
+        }
+        .admin-reset-filters-btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 34px;
+          height: 34px;
+          border-radius: 12px;
+          border: 1px solid var(--color-border);
+          background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+          color: var(--color-text-secondary);
+          cursor: pointer;
+          flex-shrink: 0;
+          transition: color 0.16s ease, border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+        }
+        .admin-reset-filters-btn:hover {
+          color: var(--color-text);
+          border-color: color-mix(in srgb, var(--color-text-secondary) 42%, var(--color-border));
+          background: var(--color-surface-hover);
+        }
+        .admin-reset-filters-btn:active {
+          transform: scale(0.96) rotate(-12deg);
+        }
+        .admin-export-xls-btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          height: 34px;
+          padding: 0 12px;
+          border-radius: 14px;
+          border: 1px solid var(--color-border);
+          background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+          color: var(--color-text-secondary);
+          cursor: pointer;
+          flex-shrink: 0;
+          transition: color 0.16s ease, border-color 0.16s ease, transform 0.16s ease, background 0.16s ease;
+        }
+        .admin-export-xls-btn span {
+          font-size: 11.5px;
+          font-weight: 700;
+          line-height: 1;
+        }
+        .admin-export-xls-btn:hover {
+          color: var(--color-text);
+          border-color: color-mix(in srgb, var(--color-text-secondary) 42%, var(--color-border));
+          background: var(--color-surface-hover);
+        }
+        .admin-export-xls-btn:active {
+          transform: scale(0.97);
+        }
 
         /* Mobile responsiveness */
+        @media (max-width: 1100px) {
+          .growth-kpi-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+        }
         @media (max-width: 767px) {
+          .growth-kpi-grid {
+            grid-template-columns: 1fr;
+          }
+          .growth-kpi-card {
+            padding: 12px;
+          }
           .cc-table-header {
             padding: 12px 14px;
             gap: 8px;
@@ -1588,12 +2995,12 @@ export function renderAdminSubscriptions(user: any) {
             display: flex;
             flex-wrap: wrap;
             align-items: flex-start;
-            padding: 16px 130px 16px 14px;
+            padding: 16px 64px 16px 14px;
             gap: 6px 8px;
             border-bottom: 1px solid var(--color-border);
           }
           /* Mais espaço entre os botões de ação no mobile */
-          .cc-table td:nth-child(7) .flex {
+          .cc-table td:nth-child(5) .flex {
             gap: 14px;
           }
           .cc-table tbody tr:last-child {
@@ -1618,45 +3025,71 @@ export function renderAdminSubscriptions(user: any) {
           .cc-mobile-actions  { display: flex; align-items: center; }
 
           /* Ações: absoluto no canto superior direito, fora do fluxo flex */
-          .cc-table td:nth-child(7) {
+          .cc-table td:nth-child(5) {
             position: absolute;
             top: 8px;
             right: 14px;
           }
 
-          /* Linha 2: badges (Acesso, Plano, Provedor) */
-          .cc-table td:nth-child(2),
-          .cc-table td:nth-child(3),
-          .cc-table td:nth-child(4) {
+          /* Linha 2: funil compacto */
+          .cc-table td:nth-child(2) {
+            flex: 0 0 100%;
+            min-width: 0;
+            order: 2;
+          }
+          .cc-funnel-cell {
+            min-width: 0;
+            max-width: none;
+            width: 100%;
+          }
+
+          /* Linha 3: banco */
+          .cc-table td:nth-child(3) {
             flex: 0 0 auto;
             order: 3;
           }
 
-          /* Linha 3: atividade */
-          .cc-table td:nth-child(5) {
+          /* Linha 4: datas e atividade */
+          .cc-table td:nth-child(4) {
             flex: 0 0 100%;
             order: 4;
             padding-top: 2px;
           }
-
-          /* Criado em: oculto no mobile (disponível no modal) */
-          .cc-table td:nth-child(6) {
-            display: none;
-          }
         }
       </style>
 
-      <main class="flex-1 w-full max-w-6xl mx-auto px-4 md:px-10 p-8 pt-24 md:pt-32">
+      <main class="flex-1 w-full max-w-7xl mx-auto px-4 md:px-10 p-8 pt-24 md:pt-32">
         <div class="w-full animate-fadein">
-          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-            <div>
-              <h2 class="text-[22px] font-semibold text-[var(--color-text)] tracking-tight leading-none">Painel de controles do sistema</h2>
-              <p class="text-[13px] text-[var(--color-text-secondary)] mt-2">Visão geral de todos os usuários criados no sistema atual e antigo.</p>
+          <div class="admin-growth-toolbar">
+            <div class="admin-growth-title">
+              <h2 class="text-[22px] font-semibold text-[var(--color-text)] tracking-tight leading-none">Gestão de usuários</h2>
+              <p class="text-[13px] text-[var(--color-text-secondary)] mt-2">Funil trial → banco conectado → assinatura ativa.</p>
             </div>
-            <div class="admin-filters-scroller">
-               ${FilterSelector({ id: 'selector-status' })}
-               ${FilterSelector({ id: 'selector-provider' })}
-               ${FilterSelector({ id: 'selector-access' })}
+            <div class="admin-filters-wrap">
+              <button id="admin-reset-filters" class="admin-reset-filters-btn" type="button" title="Resetar filtros" aria-label="Resetar filtros">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 12a9 9 0 1 0 3-6.7"/>
+                  <path d="M3 4v6h6"/>
+                </svg>
+              </button>
+              <button id="admin-export-excel" class="admin-export-xls-btn" type="button" title="Exportar tabela para Excel" aria-label="Exportar tabela para Excel">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.15" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7Z"/>
+                  <path d="M14 2v5h5"/>
+                  <path d="m9 15 2-2-2-2"/>
+                  <path d="m15 11-2 2 2 2"/>
+                </svg>
+                <span>Excel</span>
+              </button>
+              <div class="admin-filters-scroller">
+                 ${FilterSelector({ id: 'selector-origin' })}
+                 ${FilterSelector({ id: 'selector-trial-status' })}
+                 ${FilterSelector({ id: 'selector-subscription-status' })}
+                 ${FilterSelector({ id: 'selector-trial-days' })}
+                 ${FilterSelector({ id: 'selector-last-access' })}
+                 ${FilterSelector({ id: 'selector-bank-status' })}
+                 ${FilterSelector({ id: 'selector-active-subscription' })}
+              </div>
             </div>
           </div>
 
@@ -1669,28 +3102,66 @@ export function renderAdminSubscriptions(user: any) {
   `;
 
   attachHeaderListeners();
+  attachAdminFilterScroller();
+  document.getElementById('admin-reset-filters')?.addEventListener('click', resetGrowthFilters);
+  document.getElementById('admin-export-excel')?.addEventListener('click', exportGrowthTableToExcel);
 
-  // Initialize Filter Selectors once
-  attachFilterSelectorListeners({
-    id: 'selector-status',
-    filters: filters1,
-    initialFilterId: activeFilter1,
-    onFilterChange: (id) => { activeFilter1 = id; applyFilterAndRender(); }
+  filterSelectorControls = {};
+  const originSelectorControl = attachFilterSelectorListeners({
+    id: 'selector-origin',
+    filters: originFilters,
+    initialFilterId: activeOriginFilter,
+    onFilterChange: (id) => { activeOriginFilter = id; applyFilterAndRender(); }
   });
+  if (originSelectorControl) filterSelectorControls.origin = originSelectorControl;
 
-  attachFilterSelectorListeners({
-    id: 'selector-provider',
-    filters: filters2,
-    initialFilterId: activeFilter2,
-    onFilterChange: (id) => { activeFilter2 = id; applyFilterAndRender(); }
+  const trialStatusSelectorControl = attachFilterSelectorListeners({
+    id: 'selector-trial-status',
+    filters: trialStatusFilters,
+    initialFilterId: activeTrialStatusFilter,
+    onFilterChange: (id) => { activeTrialStatusFilter = id; applyFilterAndRender(); }
   });
+  if (trialStatusSelectorControl) filterSelectorControls.trialStatus = trialStatusSelectorControl;
 
-  attachFilterSelectorListeners({
-    id: 'selector-access',
-    filters: filters3,
-    initialFilterId: activeFilter3,
-    onFilterChange: (id) => { activeFilter3 = id; applyFilterAndRender(); }
+  const subscriptionStatusSelectorControl = attachFilterSelectorListeners({
+    id: 'selector-subscription-status',
+    filters: subscriptionStatusFilters,
+    initialFilterId: activeSubscriptionStatusFilter,
+    onFilterChange: (id) => { activeSubscriptionStatusFilter = id; applyFilterAndRender(); }
   });
+  if (subscriptionStatusSelectorControl) filterSelectorControls.subscriptionStatus = subscriptionStatusSelectorControl;
+
+  const trialDaysSelectorControl = attachFilterSelectorListeners({
+    id: 'selector-trial-days',
+    filters: trialDaysFilters,
+    initialFilterId: activeTrialDaysFilter,
+    onFilterChange: (id) => { activeTrialDaysFilter = id; applyFilterAndRender(); }
+  });
+  if (trialDaysSelectorControl) filterSelectorControls.trialDays = trialDaysSelectorControl;
+
+  const lastAccessSelectorControl = attachFilterSelectorListeners({
+    id: 'selector-last-access',
+    filters: lastAccessFilters,
+    initialFilterId: activeLastAccessFilter,
+    onFilterChange: (id) => { activeLastAccessFilter = id; applyFilterAndRender(); }
+  });
+  if (lastAccessSelectorControl) filterSelectorControls.lastAccess = lastAccessSelectorControl;
+
+  const bankSelectorControl = attachFilterSelectorListeners({
+    id: 'selector-bank-status',
+    filters: bankFilters,
+    initialFilterId: activeBankFilter,
+    onFilterChange: (id) => { activeBankFilter = id; applyFilterAndRender(); }
+  });
+  if (bankSelectorControl) filterSelectorControls.bank = bankSelectorControl;
+
+  const activeSubscriptionSelectorControl = attachFilterSelectorListeners({
+    id: 'selector-active-subscription',
+    filters: activeSubscriptionFilters,
+    initialFilterId: activeSubscriptionActiveFilter,
+    onFilterChange: (id) => { activeSubscriptionActiveFilter = id; applyFilterAndRender(); }
+  });
+  if (activeSubscriptionSelectorControl) filterSelectorControls.activeSubscription = activeSubscriptionSelectorControl;
 
   async function syncStripeAndLoad(user: any) {
     try {

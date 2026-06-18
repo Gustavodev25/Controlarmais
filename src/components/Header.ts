@@ -324,7 +324,7 @@ export function Header({ user }: HeaderProps): string {
             Painel Administrativo
           </button>
           <button id="nav-btn-admin-subscriptions" class="nav-link ${currentPage === 'admin-subscriptions' ? 'active' : ''}">
-            Painel de controles do sistema
+            Gestão de usuários
           </button>
           <button id="nav-btn-admin-abandoned-carts" class="nav-link ${currentPage === 'admin-abandoned-carts' ? 'active' : ''}">
             Carrinhos Abandonados
@@ -416,7 +416,7 @@ export function Header({ user }: HeaderProps): string {
           </button>
           <button id="mobile-nav-admin-subscriptions" class="mobile-nav-link ${currentPage === 'admin-subscriptions' ? 'active' : ''}">
             <lottie-player src="${isLight ? '/lottie/assinaturapreto.json' : '/lottie/assinaturabranco.json'}" background="transparent" speed="1.2" style="width: 20px; height: 20px;" data-lottie="admin-subscriptions" data-lottie-dark="/lottie/assinaturabranco.json" data-lottie-light="/lottie/assinaturapreto.json"></lottie-player>
-            Painel de controles do sistema
+            Gestão de usuários
           </button>
           <button id="mobile-nav-admin-abandoned-carts" class="mobile-nav-link ${currentPage === 'admin-abandoned-carts' ? 'active' : ''}">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

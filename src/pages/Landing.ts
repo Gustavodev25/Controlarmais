@@ -1739,9 +1739,11 @@ function injectLandingStyles() {
         gap: 12px;
         margin-bottom: 60px;
       }
-      #landing-ctas button {
+      #landing-ctas button,
+      #landing-ctas a {
         width: 100% !important;
         height: 50px !important;
+        justify-content: center;
       }
       #landing-mockup-wrap {
         padding: 0;

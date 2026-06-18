@@ -37,6 +37,7 @@ type PluggySyncRow = {
   email: string | null;
   itemId: string;
   banks: string[];
+  bankDataList?: Array<{ name: string; logo: string | null }>;
   accountCount: number;
   lastSync: string | null;
   status: 'ok' | 'stale' | 'error' | 'updating' | 'no_sync' | string;
@@ -278,6 +279,7 @@ function renderPluggyTable(rows: PluggySyncRow[], opts: { limit?: number; classN
               </td>
               <td>
                 <div class="admin-bank-list" title="${escapeHtml(row.banks.join(', '))}">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="opacity-60"><line x1="3" x2="21" y1="22" y2="22"/><line x1="6" x2="6" y1="18" y2="11"/><line x1="10" x2="10" y1="18" y2="11"/><line x1="14" x2="14" y1="18" y2="11"/><line x1="18" x2="18" y1="18" y2="11"/><polygon points="12 2 20 7 4 7"/></svg>
                   ${escapeHtml(row.banks.slice(0, 2).join(', ') || 'Banco nao identificado')}
                   ${row.banks.length > 2 ? `<span>+${row.banks.length - 2}</span>` : ''}
                 </div>
@@ -900,7 +902,6 @@ export function renderAdmin(user: any) {
           min-height: 32px;
         }
         .admin-kpi-value {
-          font-family: 'IBM Plex Mono', monospace;
           font-size: 26px;
           font-weight: 600;
           color: var(--color-text);
@@ -1035,7 +1036,6 @@ export function renderAdmin(user: any) {
         .admin-management-card strong {
           display: block;
           margin-top: 5px;
-          font-family: 'IBM Plex Mono', monospace;
           font-size: 18px;
           font-weight: 600;
           color: var(--color-text);
@@ -1430,7 +1430,7 @@ export function renderAdmin(user: any) {
               <div class="admin-section-header">
                 <div class="admin-section-title">
                   <span class="admin-section-eyebrow">Usuarios</span>
-                  <h3>Gestao de usuarios</h3>
+                  <h3>Gestão de usuários</h3>
                   <p>Perfil, bloqueio, plano e reset de acesso.</p>
                 </div>
                 <button id="admin-open-users-page" class="admin-secondary-btn" type="button">

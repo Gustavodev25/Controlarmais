@@ -36,11 +36,22 @@ import { startChangelogNotificationListener, stopChangelogNotificationListener }
 import { API_BASE } from './lib/apiConfig';
 
 // Patch global do fetch: adiciona header ngrok-skip-browser-warning em chamadas à API
-if (API_BASE.includes('ngrok')) {
+if (API_BASE.includes('ngrok') || window.location.hostname.includes('ngrok')) {
   const _fetch = window.fetch.bind(window);
   window.fetch = (input: RequestInfo | URL, init: RequestInit = {}) => {
     const url = typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
-    if (url.startsWith(API_BASE)) {
+    const parsedUrl = (() => {
+      try {
+        return new URL(url, window.location.origin);
+      } catch {
+        return null;
+      }
+    })();
+    const isApiRequest = url.startsWith('/api') ||
+      Boolean(API_BASE && url.startsWith(API_BASE)) ||
+      Boolean(parsedUrl && parsedUrl.origin === window.location.origin && parsedUrl.pathname.startsWith('/api'));
+
+    if (isApiRequest) {
       const headers = new Headers((init.headers as HeadersInit) || {});
       headers.set('ngrok-skip-browser-warning', '1');
       init = { ...init, headers };
