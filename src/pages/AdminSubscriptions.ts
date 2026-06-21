@@ -107,7 +107,12 @@ function isActiveClient(userItem: any): boolean {
 }
 
 function isPayingClient(userItem: any): boolean {
-  return userItem.isVerified === true && !isTrialClient(userItem);
+  if (userItem.isVerified !== true) return false;
+  if (isTrialClient(userItem)) return false;
+  const p = normalizeProviderKey(userItem.provider);
+  if (p !== 'asaas' && p !== 'stripe') return false;
+  const status = getProviderStatus(userItem);
+  return status === 'active';
 }
 
 function getMonthlyRevenue(userItem: any): number {
@@ -205,11 +210,62 @@ function normalizeSignupPlatformCandidate(value: any, isUserAgent = false): stri
   return raw;
 }
 
+function pickFirstKnownSignupPlatform(values: any[], isUserAgent = false): string {
+  for (const value of values) {
+    const platform = normalizeSignupPlatformCandidate(value, isUserAgent);
+    if (platform !== 'unknown') return platform;
+  }
+  return 'unknown';
+}
+
+function pickPreciseSignupPlatform(values: any[]): string {
+  const platforms = values.map((value) => normalizeSignupPlatformCandidate(value));
+  return platforms.find((platform) => platform === 'android' || platform === 'iphone') || 'unknown';
+}
+
 function getSignupPlatform(userItem: any): string {
-  const device = userItem.device || userItem.signupDevice || userItem.deviceInfo || {};
-  const candidates = [
-    userItem.signupPlatform,
-    device.signupPlatform,
+  const device = userItem.signupDevice || userItem.device || userItem.deviceInfo || {};
+  const topLevelPlatform = pickFirstKnownSignupPlatform([userItem.signupPlatform]);
+  if (topLevelPlatform !== 'unknown') return topLevelPlatform;
+
+  const source = normalizeValue(userItem.signupSource || device.signupSource);
+  const createdFromMobile = userItem.createdFromMobile ?? device.createdFromMobile;
+  if (createdFromMobile === false || ['desktop', 'web', 'pc', 'computer'].includes(source)) return 'web';
+
+  const deviceSignupPlatform = pickFirstKnownSignupPlatform([device.signupPlatform]);
+  if (deviceSignupPlatform !== 'unknown') return deviceSignupPlatform;
+
+  const userAgent = normalizeSignupPlatformCandidate(
+    userItem.signupUserAgent || userItem.userAgent || device.userAgent,
+    true
+  );
+  if (['android', 'iphone'].includes(userAgent)) return userAgent;
+
+  if (createdFromMobile === true || source === 'mobile' || source === 'app') {
+    const preciseMobile = pickPreciseSignupPlatform([
+      userItem.platform,
+      device.platform,
+      device.os,
+      userItem.os,
+      userItem.operatingSystem,
+      userItem.deviceName,
+      device.deviceName,
+      userItem.deviceType,
+      device.deviceType,
+      device.name,
+      device.type,
+    ]);
+    return preciseMobile !== 'unknown' ? preciseMobile : 'mobile';
+  }
+
+  if (['mobile', 'web'].includes(userAgent)) return userAgent;
+
+  // Fallback: infer platform from subscription provider (IAP trial users)
+  const providerKey = normalizeProviderKey(userItem.provider);
+  if (providerKey === 'apple') return 'apple_iap';
+  if (providerKey === 'android') return 'android';
+
+  const fallback = pickFirstKnownSignupPlatform([
     userItem.platform,
     device.platform,
     device.os,
@@ -221,26 +277,7 @@ function getSignupPlatform(userItem: any): string {
     device.deviceType,
     device.name,
     device.type,
-  ].map((value) => normalizeSignupPlatformCandidate(value));
-
-  const precisePlatform = candidates.find((platform) => platform === 'android' || platform === 'iphone');
-  if (precisePlatform) return precisePlatform;
-
-  const knownPlatform = candidates.find((platform) => platform === 'mobile' || platform === 'web');
-  if (knownPlatform) return knownPlatform;
-
-  const userAgent = normalizeSignupPlatformCandidate(
-    userItem.signupUserAgent || userItem.userAgent || device.userAgent,
-    true
-  );
-  if (['android', 'iphone', 'mobile', 'web'].includes(userAgent)) return userAgent;
-
-  // Fallback: infer platform from subscription provider (IAP trial users)
-  const providerKey = normalizeProviderKey(userItem.provider);
-  if (providerKey === 'apple') return 'apple_iap';
-  if (providerKey === 'android') return 'android';
-
-  const fallback = candidates.find((platform) => platform !== 'unknown') || 'unknown';
+  ]);
   if (fallback === 'unknown') {
     const createdDate = parseDateValue(userItem.createdAt || userItem.createdDate || userItem.dateCreated);
     if (createdDate && createdDate.getTime() < new Date('2026-06-15T00:00:00Z').getTime()) {
@@ -258,6 +295,20 @@ function isMobileSignup(userItem: any): boolean {
   return source === 'mobile' || source === 'app';
 }
 
+function hasStoreTrialSignal(userItem: any): boolean {
+  const provider = normalizeProviderKey(userItem.provider);
+  const platform = getSignupPlatform(userItem);
+  return provider === 'apple' ||
+    provider === 'android' ||
+    ['android', 'iphone', 'apple_iap'].includes(platform) ||
+    Boolean(
+      userItem.appleOriginalTransactionId ||
+      userItem.appStoreOriginalTransactionId ||
+      userItem.googlePlayPurchaseToken ||
+      userItem.androidPurchaseToken
+    );
+}
+
 function getSignupPlatformLabel(userItem: any): string {
   const platform = getSignupPlatform(userItem);
   if (platform === 'android') return 'Android';
@@ -265,7 +316,7 @@ function getSignupPlatformLabel(userItem: any): string {
   if (platform === 'iphone') return 'Apple';
   if (platform === 'mobile') return 'Celular';
   if (platform === 'web') return 'Web';
-  return 'Não Informado';
+  return 'Indefinido';
 }
 
 function getSignupOriginClass(userItem: any): string {
@@ -287,7 +338,7 @@ function getSignupOriginSourceLabel(userItem: any): string {
   if (platform === 'iphone') return 'Criada na Apple';
   if (isMobile) return 'Criada pelo celular';
   if (platform === 'web') return 'Criada na web';
-  return 'Origem nao informada';
+  return 'Origem indefinida: sem IAP ou Google Play';
 }
 
 function fmtDate(dateStr: string | null): string {
@@ -418,7 +469,7 @@ function renderSubscriptionModalTimelineRows(userItem: any): string {
   const trialEndsAt = userItem.trialEndsAt || userItem.trialEndsDate || null;
   const paidAt = userItem.firstPaidAt || userItem.convertedToPaidAt || null;
 
-  if (userItem.trialDays || trialStartedAt || trialEndsAt) {
+  if (hasTrialHistory(userItem) || isTrialClient(userItem)) {
     rows.push(`
       <div class="flex justify-between items-center px-4 sm:px-8 py-3 border-b border-[var(--color-border)]/50">
         <span class="text-[var(--color-text-secondary)]">Trial</span>
@@ -513,6 +564,18 @@ function parseDateValue(value: any): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function getCreatedDateValue(userItem: any): string | null {
+  return userItem.createdAt || userItem.createdDate || userItem.dateCreated || null;
+}
+
+function getCreatedDateFormatted(userItem: any): string {
+  const raw = getCreatedDateValue(userItem);
+  if (!raw) return '';
+  const d = parseDateValue(raw);
+  if (!d) return '';
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
 function getTrialStartValue(userItem: any): string | null {
   return userItem.trialStartedAt || userItem.trialStartedDate || userItem.trialStart || null;
 }
@@ -521,16 +584,24 @@ function getTrialEndValue(userItem: any): string | null {
   return userItem.trialEndsAt || userItem.trialEndsDate || userItem.trialEnd || null;
 }
 
+const ACTIVE_TRIAL_STATUSES = new Set(['trial', 'trialing']);
+const FINISHED_TRIAL_STATUSES = new Set(['ended', 'expired', 'trial_ended', 'trial-ended', 'trial_expired', 'trial-expired']);
+
+function getTrialLifecycleStatus(userItem: any): string {
+  return normalizeValue(userItem.trialStatus);
+}
+
 function hasTrialHistory(userItem: any): boolean {
-  return Boolean(
-    getTrialStartValue(userItem) ||
-    getTrialEndValue(userItem) ||
-    userItem.trialDays ||
-    normalizeValue(userItem.trialStatus)
-  );
+  if (!hasStoreTrialSignal(userItem)) return false;
+  const status = getTrialLifecycleStatus(userItem);
+  return Boolean(getTrialStartValue(userItem) || getTrialEndValue(userItem)) ||
+    ACTIVE_TRIAL_STATUSES.has(status) ||
+    FINISHED_TRIAL_STATUSES.has(status) ||
+    status === 'converted';
 }
 
 function getTrialDaysRemaining(userItem: any): number | null {
+  if (!hasStoreTrialSignal(userItem)) return null;
   const rawEnd = getTrialEndValue(userItem);
   const endDate = parseDateValue(rawEnd);
   if (!endDate) return null;
@@ -544,21 +615,25 @@ function getTrialDaysRemaining(userItem: any): number | null {
 }
 
 function getTrialDurationDays(userItem: any): number | null {
-  const rawTrialDays = Number(userItem.trialDays);
-  if (Number.isFinite(rawTrialDays) && rawTrialDays > 0) {
-    return Math.round(rawTrialDays);
-  }
-
+  if (!hasStoreTrialSignal(userItem)) return null;
   const startDate = parseDateValue(getTrialStartValue(userItem));
   const endDate = parseDateValue(getTrialEndValue(userItem));
-  if (!startDate || !endDate) return null;
+  if (startDate && endDate) {
+    const diffDays = Math.round((endDate.getTime() - startDate.getTime()) / 86400000);
+    return diffDays > 0 ? diffDays : null;
+  }
 
-  const diffDays = Math.round((endDate.getTime() - startDate.getTime()) / 86400000);
-  return diffDays > 0 ? diffDays : null;
+  const rawTrialDays = Number(userItem.trialDays);
+  if ((hasTrialHistory(userItem) || isTrialClient(userItem)) && Number.isFinite(rawTrialDays) && rawTrialDays > 0) {
+    return Math.round(rawTrialDays);
+  }
+  return null;
 }
 
 function isSevenDayTrial(userItem: any): boolean {
-  return getTrialDurationDays(userItem) === 7;
+  return hasStoreTrialSignal(userItem) &&
+    (hasTrialHistory(userItem) || isTrialClient(userItem)) &&
+    getTrialDurationDays(userItem) === 7;
 }
 
 function isConvertedClient(userItem: any): boolean {
@@ -578,22 +653,32 @@ function isConvertedCanceledClient(userItem: any): boolean {
     Boolean(userItem.canceledAt || userItem.canceledAtDate || userItem.endedAt || userItem.endedAtDate);
 }
 
-function getTrialStatusKey(userItem: any): 'active' | 'expired' | 'converted' | 'none' {
-  if (isTrialClient(userItem) || normalizeValue(userItem.trialStatus) === 'trialing') return 'active';
+function getTrialStatusKey(userItem: any): 'active' | 'canceled_active' | 'expired' | 'converted' | 'none' {
+  if (!hasStoreTrialSignal(userItem)) return 'none';
+  const trialStatus = getTrialLifecycleStatus(userItem);
   if (isConvertedClient(userItem)) return 'converted';
 
   const daysRemaining = getTrialDaysRemaining(userItem);
-  if (daysRemaining !== null) {
-    return daysRemaining >= 0 ? 'active' : 'expired';
+  const isCanceled = userItem.cancelAtPeriodEnd === true || userItem.autoRenewStatus === 'disabled';
+
+  if (isTrialClient(userItem) || ACTIVE_TRIAL_STATUSES.has(trialStatus)) {
+    if (isCanceled && daysRemaining !== null && daysRemaining >= 0) return 'canceled_active';
+    return 'active';
   }
 
-  if (hasTrialHistory(userItem)) return 'expired';
+  if (daysRemaining !== null) {
+    if (daysRemaining >= 0) return isCanceled ? 'canceled_active' : 'active';
+    return 'expired';
+  }
+
+  if (FINISHED_TRIAL_STATUSES.has(trialStatus)) return 'expired';
   return 'none';
 }
 
 function trialStatusLabel(status: string): string {
   const map: Record<string, string> = {
     active: 'Ativo',
+    canceled_active: 'Cancela no fim',
     expired: 'Expirado',
     converted: 'Convertido',
     none: 'Sem trial',
@@ -622,11 +707,13 @@ function renderTrialStatusMiniBadge(userItem: any): string {
   const status = getTrialStatusKey(userItem);
   const cls = status === 'active'
     ? 'cc-status-good'
-    : status === 'expired'
+    : status === 'canceled_active'
       ? 'cc-status-warn'
-      : status === 'converted'
-        ? 'cc-status-info'
-        : 'cc-status-muted';
+      : status === 'expired'
+        ? 'cc-status-warn'
+        : status === 'converted'
+          ? 'cc-status-info'
+          : 'cc-status-muted';
   return `<span class="cc-status-pill cc-status-pill-mini ${cls}"><span class="cc-status-context">Trial</span>${trialStatusLabel(status).toLowerCase()}</span>`;
 }
 
@@ -657,6 +744,14 @@ function getTrialDaysCompactInfo(userItem: any): { label: string; detail: string
       label: hasTrialHistory(userItem) ? 'Sem prazo' : 'Sem trial',
       detail: hasTrialHistory(userItem) ? 'Trial sem data final' : 'Nenhum trial registrado',
       cls: 'cc-funnel-muted',
+    };
+  }
+
+  if (status === 'canceled_active' && daysRemaining >= 0) {
+    return {
+      label: 'Cancela no fim',
+      detail: `Teste cancelado - acesso ate ${fmtDate(getTrialEndValue(userItem))}`,
+      cls: 'cc-funnel-warn',
     };
   }
 
@@ -701,11 +796,19 @@ function getTrialDateCompactLabel(userItem: any): string {
 
 function showFunnelModal(userItem: any) {
   const originLabel = getSignupPlatformLabel(userItem);
+  const originSourceLabel = getSignupOriginSourceLabel(userItem);
   const trialStatus = getTrialStatusKey(userItem);
   const subStatus = getSubscriptionStatusKey(userItem);
 
-  const trialLabel = trialStatus === 'active' ? 'Trial ativo' : trialStatus === 'expired' ? 'Trial expirado' : trialStatus === 'converted' ? 'Convertido' : 'Sem trial';
-  const trialClass = trialStatus === 'active' ? 'cc-fbg-good' : trialStatus === 'expired' ? 'cc-fbg-warn' : trialStatus === 'converted' ? 'cc-fbg-info' : 'cc-fbg-muted';
+  let dotOrIconModal = '';
+  if (originLabel === 'Indefinido') {
+    dotOrIconModal = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-right:6px;"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>`;
+  } else if (originLabel === 'Apple' || originLabel === 'Android' || originLabel === 'Celular') {
+    dotOrIconModal = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-right:6px;"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M12 18h.01"/></svg>`;
+  }
+
+  const trialLabel = trialStatus === 'active' ? 'Trial ativo' : trialStatus === 'canceled_active' ? 'Cancela no fim' : trialStatus === 'expired' ? 'Trial expirado' : trialStatus === 'converted' ? 'Convertido' : 'Sem trial';
+  const trialClass = trialStatus === 'active' ? 'cc-fbg-good' : trialStatus === 'canceled_active' ? 'cc-fbg-warn' : trialStatus === 'expired' ? 'cc-fbg-warn' : trialStatus === 'converted' ? 'cc-fbg-info' : 'cc-fbg-muted';
 
   const clientLabel = subStatus === 'active' ? 'Pagante' : subStatus === 'trialing' ? 'Trial ativo' : 'Inativo';
   const clientClass = subStatus === 'active' ? 'cc-fbg-good' : subStatus === 'trialing' ? 'cc-fbg-info' : 'cc-fbg-muted';
@@ -730,7 +833,8 @@ function showFunnelModal(userItem: any) {
             <div class="w-[6px] h-[6px] rounded-full bg-[var(--color-text-secondary)] ring-4 ring-[var(--color-background)] relative z-10"></div>
           </div>
           <div class="flex-1 flex justify-center items-center pl-2">
-            <div class="cc-fbg-origin flex items-center justify-center text-white text-[11px] font-bold uppercase rounded-lg w-full h-[40px]">
+            <div class="cc-fbg-origin flex items-center justify-center text-white text-[11px] font-bold uppercase rounded-lg w-full h-[40px]" title="${escapeHtml(originSourceLabel)}">
+              ${dotOrIconModal}
               ${escapeHtml(originLabel)}
             </div>
           </div>
@@ -798,13 +902,30 @@ function showFunnelModal(userItem: any) {
 }
 
 function renderFunnelCell(userItem: any): string {
+  const originLabel = getSignupPlatformLabel(userItem);
+  const originClass = getSignupOriginClass(userItem);
+  const originSourceLabel = getSignupOriginSourceLabel(userItem);
+
+  let dotOrIcon = `<span class="cc-funnel-dot"></span>`;
+  if (originLabel === 'Indefinido') {
+    dotOrIcon = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:-1px;"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>`;
+  } else if (originLabel === 'Apple' || originLabel === 'Android' || originLabel === 'Celular') {
+    dotOrIcon = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:-1px;"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M12 18h.01"/></svg>`;
+  }
+
   return `
-    <button type="button" class="cc-action-btn user-btn-funnel hover:bg-[var(--color-surface-hover)]" data-user='${safeJsonAttr(userItem)}' title="Abrir Funil" style="padding: 6px 10px; border: 1px solid var(--color-border); border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--color-text-secondary); transition: all 0.15s; white-space: nowrap; width: max-content;">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;">
-        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
-      </svg>
-      <span>Ver Funil</span>
-    </button>
+    <div class="cc-funnel-cell">
+      <span class="cc-funnel-origin ${originClass}" title="${escapeHtml(originSourceLabel)}">
+        ${dotOrIcon}
+        <span>${escapeHtml(originLabel)}</span>
+      </span>
+      <button type="button" class="cc-action-btn user-btn-funnel hover:bg-[var(--color-surface-hover)]" data-user='${safeJsonAttr(userItem)}' title="Abrir Funil" style="padding: 6px 10px; border: 1px solid var(--color-border); border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--color-text-secondary); transition: all 0.15s; white-space: nowrap; width: max-content;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;">
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+        </svg>
+        <span>Ver Funil</span>
+      </button>
+    </div>
   `;
 }
 
@@ -938,7 +1059,10 @@ function getGrowthMetrics(users: any[]) {
   const androidSignups = users.filter((u) => getSignupPlatform(u) === 'android').length;
   const iphoneSignups = users.filter((u) => getSignupPlatform(u) === 'iphone').length;
   const appleSignups = users.filter((u) => getSignupPlatform(u) === 'apple_iap').length;
-  const activeTrials = users.filter((u) => getTrialStatusKey(u) === 'active').length;
+  const activeTrials = users.filter((u) => {
+    const st = getTrialStatusKey(u);
+    return st === 'active' || st === 'canceled_active';
+  }).length;
   const sevenDayTrials = users.filter(isSevenDayTrial).length;
   const expiredTrials = users.filter((u) => getTrialStatusKey(u) === 'expired').length;
   const convertedClients = users.filter(isConvertedClient).length;
@@ -983,18 +1107,35 @@ function renderGrowthKpis(users: any[]): string {
   const metrics = getGrowthMetrics(users);
   const bankValue = metrics.averageBanks === null ? '-' : decimalFormatter.format(metrics.averageBanks);
   const appleTotal = metrics.iphoneSignups + metrics.appleSignups;
-  const mobileBreakdown = `${metrics.androidSignups} Android / ${appleTotal} Apple`;
+
+  const totalUsuariosCadastrados = users.length;
+  const totalUsuariosAtivos = users.filter((u) => {
+    const s = getSubscriptionStatusKey(u);
+    return s === 'active' || s === 'trialing';
+  }).length;
+
+  const mrrCalculado = metrics.activeSubscriptions * 35.90;
+
+  const totalApp = metrics.androidSignups + appleTotal;
+  const appBreakdown = `${metrics.androidSignups} Android / ${appleTotal} Apple`;
+
+  const iconUsers = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`;
+  const iconActive = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`;
+  const iconTrial = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18"/><path d="M10 15h4"/></svg>`;
+  const iconPaying = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/><path d="M7 15h.01M11 15h2"/></svg>`;
+  const iconMRR = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>`;
+  const iconApp = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>`;
+  const iconBank = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 10 9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/></svg>`;
 
   return `
     <div class="growth-kpi-grid" id="growth-kpi-grid">
-      ${growthKpiCard('Criadas no celular', String(metrics.mobileSignups), mobileBreakdown, '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>')}
-      ${growthKpiCard('Android', String(metrics.androidSignups), 'Contas criadas no Android', '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 16V8a7 7 0 0 1 14 0v8"/><path d="M5 12h14"/><path d="M9 4 7 1"/><path d="m15 4 2-3"/></svg>')}
-      ${growthKpiCard('Apple', String(appleTotal), 'Contas criadas na Apple', '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>')}
-      ${growthKpiCard('Trials 7 dias', String(metrics.sevenDayTrials), `${metrics.activeTrials} trial${metrics.activeTrials !== 1 ? 's' : ''} ativo${metrics.activeTrials !== 1 ? 's' : ''}`, '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18"/><path d="M10 15h4"/></svg>')}
-      ${growthKpiCard('Pagantes', String(metrics.activeSubscriptions), 'Assinaturas pagas verificadas agora', '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/><path d="M7 15h.01M11 15h2"/></svg>')}
-      ${growthKpiCard('Trials expirados', String(metrics.expiredTrials), 'Trials vencidos sem pagamento', '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>')}
-      ${growthKpiCard('Media de bancos conectados', bankValue, metrics.averageBanks === null ? 'Dados Pluggy indisponiveis' : 'Media por usuario', '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 10 9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/></svg>')}
-      ${growthKpiCard('MRR', moneyFormatter.format(metrics.mrr), 'Receita mensal recorrente', '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>')}
+      ${growthKpiCard('Total de usuarios cadastrados', String(totalUsuariosCadastrados), 'Usuários na base', iconUsers)}
+      ${growthKpiCard('Total de usuários ativos', String(totalUsuariosAtivos), 'Assinantes e Trials em andamento', iconActive)}
+      ${growthKpiCard('Clientes ativos no Trial', String(metrics.activeTrials), 'Em período de teste', iconTrial)}
+      ${growthKpiCard('Total de pagantes verificados', String(metrics.activeSubscriptions), 'Assinaturas ativas', iconPaying)}
+      ${growthKpiCard('MRR', moneyFormatter.format(mrrCalculado), 'Pagantes * R$ 35,90', iconMRR)}
+      ${growthKpiCard('Clientes APP', String(totalApp), appBreakdown, iconApp)}
+      ${growthKpiCard('Media de bancos conectados', bankValue, metrics.averageBanks === null ? 'Dados Pluggy indisponiveis' : 'Media por usuario', iconBank)}
     </div>
   `;
 }
@@ -1078,6 +1219,7 @@ function renderRow(userItem: any): string {
         </div>
       </td>
       <td>${renderFunnelCell(userItem)}</td>
+      <td style="white-space:nowrap;font-size:12px;color:var(--color-text-secondary);">${getCreatedDateFormatted(userItem) || '<span style="opacity:0.5;">—</span>'}</td>
       <td>${renderBankCell(userItem)}</td>
       <td>${renderLastAccessCell(userItem)}</td>
       <td style="text-align:right;">
@@ -1138,7 +1280,7 @@ function renderTableContent(users: any[]): string {
   if (users.length === 0) {
     return `
       <tr>
-        <td colspan="5" style="padding:60px 0;text-align:center;border:none;color:var(--color-text-secondary);font-size:13px;">
+        <td colspan="6" style="padding:60px 0;text-align:center;border:none;color:var(--color-text-secondary);font-size:13px;">
           Nenhum usuário encontrado com este filtro.
         </td>
       </tr>
@@ -1156,7 +1298,7 @@ const originFilters: FilterOption[] = [
   { id: 'android', label: 'Android' },
   { id: 'apple', label: 'Apple' },
   { id: 'web', label: 'Web' },
-  { id: 'unknown', label: 'Não Informado' },
+  { id: 'unknown', label: 'Indefinido' },
 ];
 
 const trialStatusFilters: FilterOption[] = [
@@ -1197,7 +1339,7 @@ const bankFilters: FilterOption[] = [
 
 const activeSubscriptionFilters: FilterOption[] = [
   { id: 'all_active_subscription', label: 'Todos' },
-  { id: 'only_active_subscription', label: 'Assinatura Ativa' },
+  { id: 'only_active_subscription', label: 'Pagantes' },
   { id: 'without_active_subscription', label: 'Outros' },
 ];
 
@@ -1208,6 +1350,8 @@ let activeTrialDaysFilter = localStorage.getItem('admin_growth_filter_trial_days
 let activeLastAccessFilter = localStorage.getItem('admin_growth_filter_last_access') || 'all_last_access';
 let activeBankFilter = localStorage.getItem('admin_growth_filter_bank') || 'all_bank_status';
 let activeSubscriptionActiveFilter = localStorage.getItem('admin_growth_filter_active_subscription') || 'all_active_subscription';
+let activeDateStartFilter = localStorage.getItem('admin_growth_filter_date_start') || '';
+let activeDateEndFilter = localStorage.getItem('admin_growth_filter_date_end') || '';
 let filterSelectorControls: Record<string, { setFilterId: (filterId: string) => void }> = {};
 
 function resetGrowthFilters(): void {
@@ -1228,6 +1372,8 @@ function resetGrowthFilters(): void {
   activeLastAccessFilter = defaults.lastAccess;
   activeBankFilter = defaults.bank;
   activeSubscriptionActiveFilter = defaults.activeSubscription;
+  activeDateStartFilter = '';
+  activeDateEndFilter = '';
 
   filterSelectorControls.origin?.setFilterId(defaults.origin);
   filterSelectorControls.trialStatus?.setFilterId(defaults.trialStatus);
@@ -1236,6 +1382,11 @@ function resetGrowthFilters(): void {
   filterSelectorControls.lastAccess?.setFilterId(defaults.lastAccess);
   filterSelectorControls.bank?.setFilterId(defaults.bank);
   filterSelectorControls.activeSubscription?.setFilterId(defaults.activeSubscription);
+
+  const dateStartInput = document.getElementById('filter-date-start') as HTMLInputElement | null;
+  const dateEndInput = document.getElementById('filter-date-end') as HTMLInputElement | null;
+  if (dateStartInput) dateStartInput.value = '';
+  if (dateEndInput) dateEndInput.value = '';
 
   applyFilterAndRender();
 }
@@ -1298,6 +1449,7 @@ function buildGrowthExportRows(users: any[]): string[][] {
   return users.map((userItem) => [
     exportText(userItem.name || userItem.email || userItem.uid),
     exportText(userItem.email || ''),
+    getCreatedDateFormatted(userItem),
     exportText(getSignupPlatformLabel(userItem)),
     trialStatusLabel(getTrialStatusKey(userItem)),
     subscriptionStatusLabel(getSubscriptionStatusKey(userItem)),
@@ -1309,11 +1461,11 @@ function buildGrowthExportRows(users: any[]): string[][] {
 }
 
 function exportGrowthTableToExcel(): void {
-  const rows = filteredUsersGlobal.length ? filteredUsersGlobal : allUsersGlobal;
+  const rows = filteredUsersGlobal;
   if (!rows.length) {
     toaster.create({
       title: 'Nada para exportar',
-      description: 'A tabela ainda não tem usuários carregados.',
+      description: 'Nenhum usuário encontrado com os filtros atuais.',
       type: 'message'
     });
     return;
@@ -1322,6 +1474,7 @@ function exportGrowthTableToExcel(): void {
   const headers = [
     'Nome',
     'Email',
+    'Criado em',
     'Origem',
     'Status trial',
     'Status cliente',
@@ -1332,64 +1485,29 @@ function exportGrowthTableToExcel(): void {
   ];
 
   const tableRows = buildGrowthExportRows(rows);
-  const worksheet = { headers, rows: tableRows };
-  const workbook: { worksheet?: typeof worksheet; sheetName?: string } = {};
-  const XLSX = {
-    utils: {
-      book_append_sheet(target: typeof workbook, sheet: typeof worksheet, sheetName: string) {
-        target.worksheet = sheet;
-        target.sheetName = sheetName;
-      }
-    },
-    writeFile(target: typeof workbook, filename: string) {
-      const sheet = target.worksheet || worksheet;
-      const tableHtml = `
-        <table>
-          <thead>
-            <tr>${sheet.headers.map((header) => `<th>${escapeHtml(header)}</th>`).join('')}</tr>
-          </thead>
-          <tbody>
-            ${sheet.rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`).join('')}
-          </tbody>
-        </table>
-      `;
-      const html = `
-        <!doctype html>
-        <html>
-          <head>
-            <meta charset="utf-8" />
-            <style>
-              table { border-collapse: collapse; font-family: Arial, sans-serif; font-size: 12px; }
-              th { background: #f3f4f6; font-weight: 700; }
-              th, td { border: 1px solid #d1d5db; padding: 8px 10px; mso-number-format: "\\@"; }
-            </style>
-          </head>
-          <body>${tableHtml}</body>
-        </html>
-      `;
-      const blob = new Blob(['\ufeff', html], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-    }
-  };
+  const csvRows = [headers, ...tableRows].map(row =>
+    row.map(cell => {
+      const escaped = String(cell).replace(/"/g, '""');
+      return `"${escaped}"`;
+    }).join(';')
+  );
 
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Usuários');
+  const csvContent = "\ufeff" + csvRows.join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
 
-  // Generate date for filename
   const date = new Date().toISOString().slice(0, 10);
-
-  // Write workbook to file (XLSX format)
-  XLSX.writeFile(workbook, `gestao-de-usuarios-${date}.xlsx`);
+  link.download = `gestao-de-usuarios-${date}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 
   toaster.create({
     title: 'Exportado',
-    description: `${rows.length} usuário${rows.length !== 1 ? 's' : ''} enviado${rows.length !== 1 ? 's' : ''} para Excel.`,
+    description: `${rows.length} usuário${rows.length !== 1 ? 's' : ''} exportado${rows.length !== 1 ? 's' : ''} para CSV.`,
     type: 'success'
   });
 }
@@ -1402,6 +1520,8 @@ function applyFilterAndRender() {
   localStorage.setItem('admin_growth_filter_last_access', activeLastAccessFilter);
   localStorage.setItem('admin_growth_filter_bank', activeBankFilter);
   localStorage.setItem('admin_growth_filter_active_subscription', activeSubscriptionActiveFilter);
+  localStorage.setItem('admin_growth_filter_date_start', activeDateStartFilter);
+  localStorage.setItem('admin_growth_filter_date_end', activeDateEndFilter);
 
   const tbody = document.querySelector('.cc-table tbody');
   const countSpan = document.querySelector('.cc-table-count');
@@ -1415,6 +1535,20 @@ function applyFilterAndRender() {
     const trialDuration = getTrialDurationDays(u);
     const accessDays = getLastAccessDays(u);
     const bankDataUnavailable = u.bankDataUnavailable === true;
+
+    const rawCreatedAt = getCreatedDateValue(u);
+    const createdAt = parseDateValue(rawCreatedAt);
+    let matchDateRange = true;
+    if (activeDateStartFilter || activeDateEndFilter) {
+      if (!createdAt) {
+        matchDateRange = false;
+      } else {
+        const start = activeDateStartFilter ? new Date(activeDateStartFilter + 'T00:00:00') : null;
+        const end = activeDateEndFilter ? new Date(activeDateEndFilter + 'T23:59:59.999') : null;
+        if (start && createdAt < start) matchDateRange = false;
+        if (end && createdAt > end) matchDateRange = false;
+      }
+    }
 
     const matchOrigin = activeOriginFilter === 'all_origins' ||
       (activeOriginFilter === 'mobile' && isMobileSignup(u)) ||
@@ -1461,7 +1595,8 @@ function applyFilterAndRender() {
       matchTrialDays &&
       matchLastAccess &&
       matchBank &&
-      matchActiveSubscription;
+      matchActiveSubscription &&
+      matchDateRange;
   });
 
   tbody.innerHTML = renderTableContent(filteredUsersGlobal);
@@ -2026,6 +2161,7 @@ async function loadSubscriptions(): Promise<void> {
               <tr>
                 <th>Nome</th>
                 <th>Funil</th>
+                <th>Criado em</th>
                 <th>Bancos conectados</th>
                 <th>Último acesso</th>
                 <th style="text-align:right;">Ações</th>
@@ -3082,6 +3218,12 @@ export function renderAdminSubscriptions(user: any) {
                 <span>Excel</span>
               </button>
               <div class="admin-filters-scroller">
+                 <div class="flex items-center gap-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-3 h-[34px] flex-shrink-0">
+                   <span class="text-[11.5px] font-semibold text-[var(--color-text-secondary)]">Criação:</span>
+                   <input type="date" id="filter-date-start" class="bg-transparent border-none text-[12px] text-[var(--color-text-secondary)] outline-none cursor-pointer" style="color-scheme: dark;" value="${activeDateStartFilter}">
+                   <span class="text-[var(--color-text-secondary)] text-[11.5px] font-medium">até</span>
+                   <input type="date" id="filter-date-end" class="bg-transparent border-none text-[12px] text-[var(--color-text-secondary)] outline-none cursor-pointer" style="color-scheme: dark;" value="${activeDateEndFilter}">
+                 </div>
                  ${FilterSelector({ id: 'selector-origin' })}
                  ${FilterSelector({ id: 'selector-trial-status' })}
                  ${FilterSelector({ id: 'selector-subscription-status' })}
@@ -3105,6 +3247,21 @@ export function renderAdminSubscriptions(user: any) {
   attachAdminFilterScroller();
   document.getElementById('admin-reset-filters')?.addEventListener('click', resetGrowthFilters);
   document.getElementById('admin-export-excel')?.addEventListener('click', exportGrowthTableToExcel);
+
+  const dateStartInput = document.getElementById('filter-date-start') as HTMLInputElement | null;
+  const dateEndInput = document.getElementById('filter-date-end') as HTMLInputElement | null;
+  if (dateStartInput) {
+    dateStartInput.addEventListener('change', (e) => {
+      activeDateStartFilter = (e.target as HTMLInputElement).value;
+      applyFilterAndRender();
+    });
+  }
+  if (dateEndInput) {
+    dateEndInput.addEventListener('change', (e) => {
+      activeDateEndFilter = (e.target as HTMLInputElement).value;
+      applyFilterAndRender();
+    });
+  }
 
   filterSelectorControls = {};
   const originSelectorControl = attachFilterSelectorListeners({

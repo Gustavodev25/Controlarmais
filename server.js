@@ -625,16 +625,22 @@ function normalizeSignupPlatformValue(value, isUserAgent = false) {
 
 function pickSignupPlatform(candidates = [], userAgent = '') {
     const normalized = candidates.map((value) => normalizeSignupPlatformValue(value));
-    const precisePlatform = normalized.find((platform) => platform === 'android' || platform === 'iphone');
-    if (precisePlatform) return precisePlatform;
+    const firstKnownPlatform = normalized.find((platform) => platform !== 'unknown');
+    if (firstKnownPlatform) {
+        if (firstKnownPlatform === 'mobile') {
+            const preciseMobilePlatform = normalized.find((platform) => platform === 'android' || platform === 'iphone');
+            if (preciseMobilePlatform) return preciseMobilePlatform;
 
-    const knownPlatform = normalized.find((platform) => platform === 'mobile' || platform === 'desktop');
-    if (knownPlatform) return knownPlatform;
+            const platformFromUa = userAgent ? normalizeSignupPlatformValue(userAgent, true) : 'unknown';
+            if (platformFromUa === 'android' || platformFromUa === 'iphone') return platformFromUa;
+        }
+        return firstKnownPlatform;
+    }
 
     const platformFromUa = userAgent ? normalizeSignupPlatformValue(userAgent, true) : 'unknown';
     if (['android', 'iphone', 'mobile', 'desktop'].includes(platformFromUa)) return platformFromUa;
 
-    return normalized.find((platform) => platform !== 'unknown') || 'unknown';
+    return 'unknown';
 }
 
 function buildAdminDeviceSnapshot(device = {}, fallback = {}) {
@@ -651,47 +657,69 @@ function buildAdminDeviceSnapshot(device = {}, fallback = {}) {
 }
 
 function inferSignupDevice(data = {}) {
-    const device = data.device || data.signupDevice || data.deviceInfo || data.lastDevice || {};
+    const device = data.signupDevice || data.signupDeviceInfo || data.device || data.deviceInfo || {};
+    const lastDevice = data.lastDevice || {};
     const profile = data.profile || {};
     const userAgent = data.signupUserAgent
         || device.userAgent
         || data.userAgent
         || profile.userAgent
         || '';
+    const source = String(
+        data.signupSource
+        || device.signupSource
+        || data.createdFrom
+        || data.source
+        || device.createdFrom
+        || ''
+    ).trim().toLowerCase();
+    const hasStoredCreatedFromMobile = typeof data.createdFromMobile === 'boolean'
+        || typeof device.createdFromMobile === 'boolean';
+    const storedCreatedFromMobile = typeof data.createdFromMobile === 'boolean'
+        ? data.createdFromMobile
+        : (typeof device.createdFromMobile === 'boolean' ? device.createdFromMobile : null);
+    const hasDesktopSignupHint = storedCreatedFromMobile === false
+        || source === 'desktop'
+        || source === 'web'
+        || source === 'pc'
+        || source === 'computer';
     let platform = pickSignupPlatform([
         data.signupPlatform,
         device.signupPlatform,
         profile.signupPlatform,
-        data.platform,
-        device.platform,
-        device.os,
-        data.os,
-        data.operatingSystem,
-        data.deviceName,
-        device.deviceName,
-        data.deviceType,
-        device.deviceType,
-        device.name,
-        device.type,
-        profile.platform,
     ], userAgent);
-    const source = String(
-        data.signupSource
-        || data.createdFrom
-        || data.source
-        || device.signupSource
-        || device.createdFrom
-        || data.deviceType
-        || device.deviceType
-        || ''
-    ).trim().toLowerCase();
-    const explicitMobile = data.createdFromMobile === true
-        || device.createdFromMobile === true
+    if (platform === 'unknown' && !hasDesktopSignupHint) {
+        platform = pickSignupPlatform([
+            data.platform,
+            device.platform,
+            device.os,
+            data.os,
+            data.operatingSystem,
+            data.deviceName,
+            device.deviceName,
+            data.deviceType,
+            device.deviceType,
+            device.name,
+            device.type,
+            profile.platform,
+        ], userAgent);
+    }
+    if (platform === 'unknown' && lastDevice && !hasDesktopSignupHint) {
+        platform = pickSignupPlatform([
+            lastDevice.signupPlatform,
+            lastDevice.platform,
+            lastDevice.os,
+            lastDevice.deviceName,
+            lastDevice.deviceType,
+            lastDevice.name,
+            lastDevice.type,
+        ], lastDevice.userAgent || '');
+    }
+    const explicitMobile = storedCreatedFromMobile === true
         || source === 'mobile'
         || source === 'app'
         || ['android', 'iphone', 'mobile'].includes(platform);
-    const explicitDesktop = data.createdFromMobile === false
-        || device.createdFromMobile === false
+    const explicitDesktop = storedCreatedFromMobile === false
         || source === 'desktop'
         || source === 'web'
         || source === 'pc'
@@ -700,7 +728,9 @@ function inferSignupDevice(data = {}) {
     if (platform === 'unknown') {
         platform = explicitMobile ? 'mobile' : (explicitDesktop ? 'desktop' : 'unknown');
     }
-    const createdFromMobile = explicitMobile ? true : (explicitDesktop ? false : null);
+    const createdFromMobile = hasStoredCreatedFromMobile
+        ? storedCreatedFromMobile
+        : (explicitMobile ? true : (explicitDesktop ? false : null));
 
     return {
         createdFromMobile,
@@ -2308,6 +2338,7 @@ app.get('/api/admin/users', async (req, res) => {
                 firstPaidDate: sub.firstPaidDate || (firstPaidAt ? firstPaidAt.split('T')[0] : null),
                 convertedToPaidAt,
                 convertedToPaidDate: sub.convertedToPaidDate || (convertedToPaidAt ? convertedToPaidAt.split('T')[0] : null),
+                hasFirestoreUserDoc: true,
                 isAdmin: data.isAdmin || false,
                 disabled,
                 isBlocked: disabled,
@@ -2365,6 +2396,7 @@ app.get('/api/admin/users', async (req, res) => {
                     firstPaidDate: null,
                     convertedToPaidAt: null,
                     convertedToPaidDate: null,
+                    hasFirestoreUserDoc: false,
                     createdAt: authUser.metadata?.creationTime || null,
                     lastLogin: authUser.metadata?.lastSignInTime || null,
                     activeDaysCount: 0
