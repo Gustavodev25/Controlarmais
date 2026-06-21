@@ -1,3 +1,5 @@
+import gsap from 'gsap';
+import { DateRangePicker, attachDateRangePickerListeners } from '../components/DateRangePicker';
 import { BrilhoHeader } from '../components/BrilhoHeader';
 import { Header, attachHeaderListeners } from '../components/Header';
 import { toaster } from '../components/Toast';
@@ -1068,9 +1070,17 @@ function getGrowthMetrics(users: any[]) {
   const convertedClients = users.filter(isConvertedClient).length;
   const conversionBase = users.filter((u) => hasTrialHistory(u) || isConvertedClient(u)).length;
   const activeSummary = getActiveClientSummary(users);
-  const knownBankUsers = users.filter((u) => u.bankDataUnavailable !== true);
-  const averageBanks = knownBankUsers.length
-    ? knownBankUsers.reduce((sum, u) => sum + getConnectedBankCount(u), 0) / knownBankUsers.length
+
+  const activeUsers = users.filter((u) => {
+    const s = getSubscriptionStatusKey(u);
+    return s === 'active' || s === 'trialing';
+  });
+
+  const knownBankActiveUsers = activeUsers.filter((u) => u.bankDataUnavailable !== true);
+  const totalBanksOfActiveUsers = knownBankActiveUsers.reduce((sum, u) => sum + getConnectedBankCount(u), 0);
+  
+  const averageBanks = activeUsers.length > 0
+    ? totalBanksOfActiveUsers / activeUsers.length
     : null;
 
   return {
@@ -1135,7 +1145,7 @@ function renderGrowthKpis(users: any[]): string {
       ${growthKpiCard('Total de pagantes verificados', String(metrics.activeSubscriptions), 'Assinaturas ativas', iconPaying)}
       ${growthKpiCard('MRR', moneyFormatter.format(mrrCalculado), 'Pagantes * R$ 35,90', iconMRR)}
       ${growthKpiCard('Clientes APP', String(totalApp), appBreakdown, iconApp)}
-      ${growthKpiCard('Media de bancos conectados', bankValue, metrics.averageBanks === null ? 'Dados Pluggy indisponiveis' : 'Media por usuario', iconBank)}
+      ${growthKpiCard('Media de bancos conectados', bankValue, metrics.averageBanks === null ? 'Dados Pluggy indisponiveis' : 'Media por usuario ativo', iconBank)}
     </div>
   `;
 }
@@ -1352,6 +1362,7 @@ let activeBankFilter = localStorage.getItem('admin_growth_filter_bank') || 'all_
 let activeSubscriptionActiveFilter = localStorage.getItem('admin_growth_filter_active_subscription') || 'all_active_subscription';
 let activeDateStartFilter = localStorage.getItem('admin_growth_filter_date_start') || '';
 let activeDateEndFilter = localStorage.getItem('admin_growth_filter_date_end') || '';
+let activeUserSearch = localStorage.getItem('admin_growth_user_search') || '';
 let filterSelectorControls: Record<string, { setFilterId: (filterId: string) => void }> = {};
 
 function resetGrowthFilters(): void {
@@ -1374,6 +1385,7 @@ function resetGrowthFilters(): void {
   activeSubscriptionActiveFilter = defaults.activeSubscription;
   activeDateStartFilter = '';
   activeDateEndFilter = '';
+  activeUserSearch = '';
 
   filterSelectorControls.origin?.setFilterId(defaults.origin);
   filterSelectorControls.trialStatus?.setFilterId(defaults.trialStatus);
@@ -1385,10 +1397,41 @@ function resetGrowthFilters(): void {
 
   const dateStartInput = document.getElementById('filter-date-start') as HTMLInputElement | null;
   const dateEndInput = document.getElementById('filter-date-end') as HTMLInputElement | null;
+  const userSearchInput = document.getElementById('admin-user-search') as HTMLInputElement | null;
   if (dateStartInput) dateStartInput.value = '';
   if (dateEndInput) dateEndInput.value = '';
+  if (userSearchInput) userSearchInput.value = '';
 
   applyFilterAndRender();
+}
+
+function normalizeSearchText(value: any): string {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function userMatchesSearch(userItem: any, searchTerm: string): boolean {
+  const term = normalizeSearchText(searchTerm);
+  if (!term) return true;
+
+  const searchable = [
+    userItem.name,
+    userItem.email,
+    userItem.uid,
+    userItem.plan,
+    userItem.provider,
+    userItem.status,
+    userItem.providerStatus,
+    getSignupPlatformLabel(userItem),
+    trialStatusLabel(getTrialStatusKey(userItem)),
+    subscriptionStatusLabel(getSubscriptionStatusKey(userItem)),
+    getBankExportText(userItem),
+  ].map(normalizeSearchText).join(' ');
+
+  return searchable.includes(term);
 }
 
 function exportText(value: any): string {
@@ -1522,6 +1565,7 @@ function applyFilterAndRender() {
   localStorage.setItem('admin_growth_filter_active_subscription', activeSubscriptionActiveFilter);
   localStorage.setItem('admin_growth_filter_date_start', activeDateStartFilter);
   localStorage.setItem('admin_growth_filter_date_end', activeDateEndFilter);
+  localStorage.setItem('admin_growth_user_search', activeUserSearch);
 
   const tbody = document.querySelector('.cc-table tbody');
   const countSpan = document.querySelector('.cc-table-count');
@@ -1535,6 +1579,7 @@ function applyFilterAndRender() {
     const trialDuration = getTrialDurationDays(u);
     const accessDays = getLastAccessDays(u);
     const bankDataUnavailable = u.bankDataUnavailable === true;
+    const matchSearch = userMatchesSearch(u, activeUserSearch);
 
     const rawCreatedAt = getCreatedDateValue(u);
     const createdAt = parseDateValue(rawCreatedAt);
@@ -1596,6 +1641,7 @@ function applyFilterAndRender() {
       matchLastAccess &&
       matchBank &&
       matchActiveSubscription &&
+      matchSearch &&
       matchDateRange;
   });
 
@@ -2059,6 +2105,7 @@ function attachAdminFilterScroller(): void {
     if (event.button !== 0) return;
     const target = event.target as HTMLElement | null;
     if (target?.closest('.filter-nav-btn')) return;
+    if (target?.closest('.date-range-trigger')) return;
 
     isPointerDown = true;
     hasMoved = false;
@@ -3073,6 +3120,41 @@ export function renderAdminSubscriptions(user: any) {
         .admin-export-xls-btn:active {
           transform: scale(0.97);
         }
+        .admin-user-search {
+          position: relative;
+          flex: 0 1 280px;
+          min-width: 220px;
+          height: 34px;
+        }
+        .admin-user-search svg {
+          position: absolute;
+          left: 11px;
+          top: 50%;
+          transform: translateY(-50%);
+          color: var(--color-text-secondary);
+          pointer-events: none;
+        }
+        .admin-user-search input {
+          width: 100%;
+          height: 100%;
+          border: 1px solid var(--color-border);
+          border-radius: 14px;
+          background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+          color: var(--color-text);
+          padding: 0 12px 0 34px;
+          font-size: 12px;
+          font-weight: 600;
+          outline: none;
+          transition: color 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+        }
+        .admin-user-search input::placeholder {
+          color: var(--color-text-secondary);
+          font-weight: 500;
+        }
+        .admin-user-search input:focus {
+          border-color: color-mix(in srgb, var(--color-text-secondary) 48%, var(--color-border));
+          background: var(--color-surface-hover);
+        }
 
         /* Mobile responsiveness */
         @media (max-width: 1100px) {
@@ -3086,6 +3168,17 @@ export function renderAdminSubscriptions(user: any) {
           }
           .growth-kpi-card {
             padding: 12px;
+          }
+          .admin-filters-wrap {
+            flex-wrap: wrap;
+          }
+          .admin-user-search {
+            order: -1;
+            flex: 1 1 100%;
+            min-width: 0;
+          }
+          .admin-filters-scroller {
+            flex: 1 1 100%;
           }
           .cc-table-header {
             padding: 12px 14px;
@@ -3212,18 +3305,19 @@ export function renderAdminSubscriptions(user: any) {
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.15" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7Z"/>
                   <path d="M14 2v5h5"/>
-                  <path d="m9 15 2-2-2-2"/>
+                  <path d="m9 15-2-2-2-2"/>
                   <path d="m15 11-2 2 2 2"/>
                 </svg>
                 <span>Excel</span>
               </button>
+              <label class="admin-user-search" for="admin-user-search">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+                </svg>
+                <input id="admin-user-search" type="search" placeholder="Buscar usuario" value="${escapeHtml(activeUserSearch)}" autocomplete="off" />
+              </label>
               <div class="admin-filters-scroller">
-                 <div class="flex items-center gap-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-3 h-[34px] flex-shrink-0">
-                   <span class="text-[11.5px] font-semibold text-[var(--color-text-secondary)]">Criação:</span>
-                   <input type="date" id="filter-date-start" class="bg-transparent border-none text-[12px] text-[var(--color-text-secondary)] outline-none cursor-pointer" style="color-scheme: dark;" value="${activeDateStartFilter}">
-                   <span class="text-[var(--color-text-secondary)] text-[11.5px] font-medium">até</span>
-                   <input type="date" id="filter-date-end" class="bg-transparent border-none text-[12px] text-[var(--color-text-secondary)] outline-none cursor-pointer" style="color-scheme: dark;" value="${activeDateEndFilter}">
-                 </div>
+                 ${DateRangePicker({ id: 'admin-date-range' })}
                  ${FilterSelector({ id: 'selector-origin' })}
                  ${FilterSelector({ id: 'selector-trial-status' })}
                  ${FilterSelector({ id: 'selector-subscription-status' })}
@@ -3247,21 +3341,26 @@ export function renderAdminSubscriptions(user: any) {
   attachAdminFilterScroller();
   document.getElementById('admin-reset-filters')?.addEventListener('click', resetGrowthFilters);
   document.getElementById('admin-export-excel')?.addEventListener('click', exportGrowthTableToExcel);
+  document.getElementById('admin-user-search')?.addEventListener('input', (event) => {
+    activeUserSearch = (event.target as HTMLInputElement).value;
+    applyFilterAndRender();
+  });
 
-  const dateStartInput = document.getElementById('filter-date-start') as HTMLInputElement | null;
-  const dateEndInput = document.getElementById('filter-date-end') as HTMLInputElement | null;
-  if (dateStartInput) {
-    dateStartInput.addEventListener('change', (e) => {
-      activeDateStartFilter = (e.target as HTMLInputElement).value;
+  attachDateRangePickerListeners({
+    id: 'admin-date-range',
+    initialStart: activeDateStartFilter,
+    initialEnd: activeDateEndFilter,
+    onChange: (start, end) => {
+      activeDateStartFilter = start;
+      activeDateEndFilter = end;
       applyFilterAndRender();
-    });
-  }
-  if (dateEndInput) {
-    dateEndInput.addEventListener('change', (e) => {
-      activeDateEndFilter = (e.target as HTMLInputElement).value;
-      applyFilterAndRender();
-    });
-  }
+      
+      if (start && end) {
+        const evt = new MouseEvent('click', { bubbles: true, cancelable: true });
+        document.body.dispatchEvent(evt);
+      }
+    }
+  });
 
   filterSelectorControls = {};
   const originSelectorControl = attachFilterSelectorListeners({
