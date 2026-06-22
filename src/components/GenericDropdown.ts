@@ -31,15 +31,15 @@ export function GenericDropdown({ id, items = [], customContent, width = '160px'
         return `
             <button
                 ${item.id ? `id="${item.id}"` : ''}
-                class="${base} ${color} justify-between"
+                class="${base} ${color} justify-between w-full"
             >
-                <div class="flex items-center gap-3">
-                    <span class="${iconColor} transition-colors duration-150 shrink-0 w-4 h-4 flex items-center justify-center">
+                <div class="flex items-center gap-3 w-full min-w-0">
+                    ${item.icon ? `<span class="${iconColor} transition-colors duration-150 shrink-0 w-4 h-4 flex items-center justify-center">
                         ${item.icon}
-                    </span>
-                    <span class="font-medium tracking-[-0.01em] leading-none">${item.label}</span>
+                    </span>` : ''}
+                    <span class="font-medium tracking-[-0.01em] leading-none flex-1 min-w-0">${item.label}</span>
                 </div>
-                ${item.sublabel ? `<span class="text-[11px] text-[var(--color-text-secondary)] font-medium whitespace-nowrap ml-4">${item.sublabel}</span>` : ''}
+                ${item.sublabel ? `<span class="text-[11px] text-[var(--color-text-secondary)] font-medium whitespace-nowrap ml-4 shrink-0">${item.sublabel}</span>` : ''}
             </button>
         `;
     };

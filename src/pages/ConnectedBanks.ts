@@ -4,7 +4,7 @@ import { BrilhoHeader } from '../components/BrilhoHeader';
 import { EmptyState, initEmptyStateLotties } from '../components/EmptyState';
 import { openBankConnectModal } from '../components/BankConnectModal';
 import { auth } from '../lib/firebase';
-import { updateDoc } from 'firebase/firestore';
+import { deleteDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { toaster } from '../components/Toast';
 import { GenericDropdown, attachGenericDropdownListeners } from '../components/GenericDropdown';
 import { DeleteConfirmationModal } from '../components/DeleteConfirmationModal';
@@ -13,10 +13,11 @@ import { Modal } from '../components/Modal';
 import { Input } from '../components/Input';
 import { getSyncCredits } from '../lib/syncCredits';
 import gsap from 'gsap';
-import { getPluggyDocRef, loadPluggyRecords } from '../lib/pluggyFirestore';
+import { getPluggyCanonicalDocRef, getPluggyDocRef, loadPluggyRecords } from '../lib/pluggyFirestore';
 import { SYNC_COMBOS } from '../components/SyncCreditsModal';
 import { openSyncCreditsCheckout } from '../components/SyncCreditsCheckout';
 import { Tooltip, injectTooltipStyles, initAllTooltips, attachTooltipListeners } from '../components/Tooltip';
+import { clearUserCache } from '../lib/indexedDBCache';
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Animação Líquida Dinâmica — Bank Cards Entrance
@@ -158,26 +159,29 @@ function ConnectedAccountsContent(): string {
     items: SYNC_COMBOS.map(combo => ({
       id: `buy-combo-${combo.id}`,
       label: `
-                  <div class="flex flex-col gap-0.5 w-full text-left">
-                    <div class="flex items-center justify-between w-full">
+                  <div class="flex items-center justify-between w-full">
+                    <div class="flex flex-col gap-0.5 text-left">
                       <span class="font-bold text-[13px] text-[var(--color-text)]">${combo.name}</span>
-                      <div class="flex items-baseline gap-0.5">
-                        <span class="text-[9px] text-[var(--color-text-secondary)] font-medium">R$</span>
-                        <span class="text-[#D97757] font-bold text-[15px]">${combo.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 }).split(',')[0]}</span>
-                        <span class="text-[10px] text-[var(--color-text-secondary)] font-medium">,${combo.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 }).split(',')[1]}</span>
-                      </div>
+                      <span class="text-[10px] text-[var(--color-text-secondary)] font-medium opacity-60">
+                        ${combo.credits === 9999 ? 'Acesso ilimitado' : `${combo.credits} Coins`}
+                      </span>
                     </div>
-                    <span class="text-[10px] text-[var(--color-text-secondary)] font-medium opacity-60">
-                      ${combo.credits === 9999 ? 'Acesso ilimitado' : `${combo.credits} Coins`}
-                    </span>
+                    <div class="flex items-baseline gap-0.5">
+                      <span class="text-[9px] text-[var(--color-text-secondary)] font-medium">R$</span>
+                      <span class="text-[var(--color-text)] font-bold text-[15px]">${combo.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 }).split(',')[0]}</span>
+                      <span class="text-[10px] text-[var(--color-text-secondary)] font-medium">,${combo.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 }).split(',')[1]}</span>
+                    </div>
                   </div>
                 `,
-      icon: `<img src="/assets/logo/coinzinha.png" style="width: 18px; height: 18px; object-fit: contain;" class="lottie-dropdown-icon" />`
+      icon: ''
     }))
   })}
           </div>
           <button id="btn-connect-bank-header" class="bg-[var(--color-surface)] border border-[var(--color-border)] hover:bg-[var(--color-surface-hover)] text-[var(--color-text)] px-4 py-2 rounded-xl text-[13px] font-medium transition-all duration-200">
             Conectar conta
+          </button>
+          <button id="btn-create-manual-account" class="bg-[#D97757] hover:bg-[#E2886A] text-white px-4 py-2 rounded-xl text-[13px] font-bold transition-all duration-200">
+            Conta manual
           </button>
         </div>
       </div>
@@ -255,6 +259,7 @@ export function renderConnectedBanks(user: any) {
   initEmptyStateLotties();
 
   document.getElementById('btn-connect-bank-header')?.addEventListener('click', openBankConnectModal);
+  document.getElementById('btn-create-manual-account')?.addEventListener('click', createManualAccount);
   attachGenericDropdownListeners('connect-credits-display', 'credits-purchase');
 
 
@@ -291,6 +296,27 @@ async function deleteConnection(itemId: string) {
       try {
         const user = auth.currentUser;
         if (!user) return;
+
+        const accountDocs = (await loadPluggyRecords<any>(user.uid, 'accounts'))
+          .filter((accountDoc) => (accountDoc.itemId || accountDoc.id) === itemId);
+        const isManualConnection = accountDocs.some((accountDoc) => accountDoc.isManual === true || accountDoc.provider === 'manual');
+
+        if (isManualConnection) {
+          const accountIds = new Set(accountDocs.map((accountDoc) => accountDoc.id));
+          const transactionDocs = (await loadPluggyRecords<any>(user.uid, 'creditCardTransactions'))
+            .filter((transactionDoc) => accountIds.has(transactionDoc.accountId));
+
+          await Promise.all([
+            ...transactionDocs.map((transactionDoc) => deleteDoc(getPluggyDocRef(transactionDoc))),
+            ...accountDocs.map((accountDoc) => deleteDoc(getPluggyDocRef(accountDoc)))
+          ]);
+          await clearUserCache(user.uid);
+
+          toaster.create({ title: "Sucesso", description: "Conta manual removida com sucesso.", type: "success" });
+          window.dispatchEvent(new CustomEvent('app-sync-completed'));
+          return;
+        }
+
         const token = await user.getIdToken();
 
         const API_BASE_URL = API_BASE;
@@ -530,6 +556,323 @@ function formatBRL(value: number): string {
   return value.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
 }
 
+function parseManualMoney(value: unknown): number {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  const raw = String(value || '').trim();
+  const normalized = raw.includes(',')
+    ? raw.replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, '')
+    : raw.replace(/[^\d.-]/g, '');
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function clampDay(value: unknown, fallback: number): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed)) return fallback;
+  return Math.min(28, Math.max(1, parsed));
+}
+
+function toISODate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getManualCardDates(closingDay: number, dueDay: number): { closeDate: string; dueDate: string } {
+  const today = new Date();
+  let closeYear = today.getFullYear();
+  let closeMonth = today.getMonth();
+  let closeDate = new Date(closeYear, closeMonth, closingDay, 12, 0, 0);
+
+  if (today > closeDate) {
+    closeMonth += 1;
+    if (closeMonth > 11) {
+      closeMonth = 0;
+      closeYear += 1;
+    }
+    closeDate = new Date(closeYear, closeMonth, closingDay, 12, 0, 0);
+  }
+
+  let dueMonth = closeMonth + (dueDay <= closingDay ? 1 : 0);
+  let dueYear = closeYear;
+  if (dueMonth > 11) {
+    dueMonth = 0;
+    dueYear += 1;
+  }
+  const dueDate = new Date(dueYear, dueMonth, dueDay, 12, 0, 0);
+
+  return {
+    closeDate: toISODate(closeDate),
+    dueDate: toISODate(dueDate)
+  };
+}
+
+function makeManualId(prefix: string): string {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+async function createManualAccount() {
+  Modal({
+    title: 'Criar conta manual',
+    confirmText: 'Criar conta',
+    showCancel: true,
+    content: `
+      <div class="space-y-4">
+        <p class="text-[13px] text-[var(--color-text-secondary)]">Cadastre uma conta fora da sincronizacao bancaria para controlar saldo, poupancas e cartoes manualmente.</p>
+        ${Input({
+      id: 'manual-bank-name',
+      label: 'Banco',
+      type: 'text',
+      required: true,
+      placeholder: 'Ex: Nubank, Itau, Carteira'
+    })}
+        ${Input({
+      id: 'manual-account-name',
+      label: 'Nome da conta',
+      type: 'text',
+      required: true,
+      placeholder: 'Ex: Conta principal'
+    })}
+        ${Input({
+      id: 'manual-account-balance',
+      label: 'Saldo inicial',
+      type: 'number',
+      value: '0',
+      inputmode: 'decimal',
+      placeholder: '0,00'
+    })}
+      </div>
+    `,
+    onConfirm: async (data: any) => {
+      const user = auth.currentUser;
+      if (!user) throw new Error('PREVENT_CLOSE');
+
+      const bankName = String(data['manual-bank-name'] || '').trim();
+      const accountName = String(data['manual-account-name'] || '').trim();
+      if (!bankName || !accountName) {
+        toaster.create({ title: 'Campos obrigatorios', description: 'Informe o banco e o nome da conta.', type: 'error' });
+        throw new Error('PREVENT_CLOSE');
+      }
+
+      const now = new Date().toISOString();
+      const accountId = makeManualId('manual_bank');
+      const balance = parseManualMoney(data['manual-account-balance']);
+
+      await setDoc(getPluggyCanonicalDocRef(user.uid, 'accounts', accountId), {
+        id: accountId,
+        userId: user.uid,
+        itemId: accountId,
+        pluggyItemId: accountId,
+        isManual: true,
+        provider: 'manual',
+        type: 'CHECKING',
+        subtype: 'CHECKING_ACCOUNT',
+        name: accountName,
+        balance,
+        currencyCode: 'BRL',
+        institution: {
+          name: bankName,
+          imageUrl: '/assets/logo/logo.png'
+        },
+        connector: {
+          name: bankName,
+          imageUrl: '/assets/logo/logo.png'
+        },
+        createdAt: now,
+        updatedAt: now,
+        lastSync: now,
+        lastSyncStartedAt: now,
+        transactionsSyncCursorAt: now
+      }, { merge: true });
+      await clearUserCache(user.uid);
+
+      toaster.create({ title: 'Conta criada', description: 'A conta manual foi adicionada.', type: 'success' });
+      window.dispatchEvent(new CustomEvent('app-sync-completed'));
+    }
+  });
+}
+
+async function createManualCard(itemId: string, institutionName: string) {
+  Modal({
+    title: 'Criar cartao manual',
+    confirmText: 'Criar cartao',
+    showCancel: true,
+    content: `
+      <div class="space-y-4">
+        <p class="text-[13px] text-[var(--color-text-secondary)]">O cartao aparecera em Cartoes de Credito e os lancamentos manuais consumirao o limite disponivel.</p>
+        ${Input({
+      id: 'manual-card-name',
+      label: 'Nome do cartao',
+      type: 'text',
+      required: true,
+      placeholder: 'Ex: Cartao principal'
+    })}
+        ${Input({
+      id: 'manual-card-limit',
+      label: 'Limite total',
+      type: 'number',
+      required: true,
+      inputmode: 'decimal',
+      placeholder: 'Ex: 3000,00'
+    })}
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          ${Input({
+      id: 'manual-card-closing-day',
+      label: 'Dia de fechamento',
+      type: 'number',
+      value: '10',
+      inputmode: 'numeric',
+      placeholder: '10'
+    })}
+          ${Input({
+      id: 'manual-card-due-day',
+      label: 'Dia de vencimento',
+      type: 'number',
+      value: '20',
+      inputmode: 'numeric',
+      placeholder: '20'
+    })}
+        </div>
+      </div>
+    `,
+    onConfirm: async (data: any) => {
+      const user = auth.currentUser;
+      if (!user) throw new Error('PREVENT_CLOSE');
+
+      const cardName = String(data['manual-card-name'] || '').trim();
+      const limit = parseManualMoney(data['manual-card-limit']);
+      if (!cardName || limit <= 0) {
+        toaster.create({ title: 'Dados invalidos', description: 'Informe o nome do cartao e um limite maior que zero.', type: 'error' });
+        throw new Error('PREVENT_CLOSE');
+      }
+
+      const closingDay = clampDay(data['manual-card-closing-day'], 10);
+      const dueDay = clampDay(data['manual-card-due-day'], 20);
+      const dates = getManualCardDates(closingDay, dueDay);
+      const now = new Date().toISOString();
+      const cardId = makeManualId('manual_card');
+
+      await setDoc(getPluggyCanonicalDocRef(user.uid, 'accounts', cardId), {
+        id: cardId,
+        userId: user.uid,
+        itemId,
+        pluggyItemId: itemId,
+        isManual: true,
+        provider: 'manual',
+        type: 'CREDIT',
+        subtype: 'CREDIT_CARD',
+        name: cardName,
+        balance: 0,
+        currencyCode: 'BRL',
+        institution: {
+          name: institutionName || 'Banco manual',
+          imageUrl: '/assets/logo/logo.png'
+        },
+        connector: {
+          name: institutionName || 'Banco manual',
+          imageUrl: '/assets/logo/logo.png'
+        },
+        creditData: {
+          brand: 'MANUAL',
+          creditLimit: limit,
+          availableCreditLimit: limit,
+          balance: 0,
+          balanceCloseDate: dates.closeDate,
+          balanceDueDate: dates.dueDate
+        },
+        closingDateSettings: {
+          closingDay,
+          applyToAll: true,
+          updatedAt: now
+        },
+        createdAt: now,
+        updatedAt: now,
+        lastSync: now,
+        lastSyncStartedAt: now,
+        transactionsSyncCursorAt: now
+      }, { merge: true });
+      await clearUserCache(user.uid);
+
+      toaster.create({ title: 'Cartao criado', description: 'O cartao manual ja esta disponivel em Cartoes de Credito.', type: 'success' });
+      window.dispatchEvent(new CustomEvent('app-sync-completed'));
+    }
+  });
+}
+
+async function createManualSavings(itemId: string, institutionName: string) {
+  Modal({
+    title: 'Criar poupanca manual',
+    confirmText: 'Criar poupanca',
+    showCancel: true,
+    content: `
+      <div class="space-y-4">
+        <p class="text-[13px] text-[var(--color-text-secondary)]">Cadastre uma poupanca manual dentro deste banco para acompanhar o saldo junto das contas.</p>
+        ${Input({
+      id: 'manual-savings-name',
+      label: 'Nome da poupanca',
+      type: 'text',
+      required: true,
+      placeholder: 'Ex: Reserva de emergencia'
+    })}
+        ${Input({
+      id: 'manual-savings-balance',
+      label: 'Saldo inicial',
+      type: 'number',
+      value: '0',
+      inputmode: 'decimal',
+      placeholder: '0,00'
+    })}
+      </div>
+    `,
+    onConfirm: async (data: any) => {
+      const user = auth.currentUser;
+      if (!user) throw new Error('PREVENT_CLOSE');
+
+      const savingsName = String(data['manual-savings-name'] || '').trim();
+      if (!savingsName) {
+        toaster.create({ title: 'Campo obrigatorio', description: 'Informe o nome da poupanca.', type: 'error' });
+        throw new Error('PREVENT_CLOSE');
+      }
+
+      const now = new Date().toISOString();
+      const savingsId = makeManualId('manual_savings');
+      const balance = parseManualMoney(data['manual-savings-balance']);
+
+      await setDoc(getPluggyCanonicalDocRef(user.uid, 'accounts', savingsId), {
+        id: savingsId,
+        userId: user.uid,
+        itemId,
+        pluggyItemId: itemId,
+        isManual: true,
+        provider: 'manual',
+        type: 'SAVINGS',
+        subtype: 'SAVINGS_ACCOUNT',
+        name: savingsName,
+        balance,
+        currencyCode: 'BRL',
+        institution: {
+          name: institutionName || 'Banco manual',
+          imageUrl: '/assets/logo/logo.png'
+        },
+        connector: {
+          name: institutionName || 'Banco manual',
+          imageUrl: '/assets/logo/logo.png'
+        },
+        createdAt: now,
+        updatedAt: now,
+        lastSync: now,
+        lastSyncStartedAt: now,
+        transactionsSyncCursorAt: now
+      }, { merge: true });
+      await clearUserCache(user.uid);
+
+      toaster.create({ title: 'Poupanca criada', description: 'A poupanca manual foi adicionada neste banco.', type: 'success' });
+      window.dispatchEvent(new CustomEvent('app-sync-completed'));
+    }
+  });
+}
+
 /** Ícone e label por tipo de conta */
 function getAccountTypeMeta(type: string): { label: string; icon: string; color: string; dot: string } {
   switch (type) {
@@ -661,10 +1004,19 @@ async function loadConnectedAccounts(userId: string) {
         description: 'Conecte sua primeira conta para sincronizar automaticamente suas transações, faturas e saldo.',
         icon: ''
       })}
+          <div class="flex flex-col sm:flex-row items-center justify-center gap-3 -mt-6">
+            <button id="btn-connect-first-bank" class="bg-[var(--color-surface)] border border-[var(--color-border)] hover:bg-[var(--color-surface-hover)] text-[var(--color-text)] px-4 py-2 rounded-xl text-[13px] font-medium transition-all duration-200">
+              Conectar conta
+            </button>
+            <button id="btn-create-first-manual-account" class="bg-[#D97757] hover:bg-[#E2886A] text-white px-4 py-2 rounded-xl text-[13px] font-bold transition-all duration-200">
+              Criar conta manual
+            </button>
+          </div>
         </div>
       `;
       initEmptyStateLotties();
       document.getElementById('btn-connect-first-bank')?.addEventListener('click', openBankConnectModal);
+      document.getElementById('btn-create-first-manual-account')?.addEventListener('click', createManualAccount);
       return;
     }
 
@@ -705,6 +1057,7 @@ async function loadConnectedAccounts(userId: string) {
       const totalBankBalance = bankAccounts.reduce((s, a) => s + (a.balance ?? 0), 0);
       const showMainBalance = bankAccounts.length > 0;
       const mainCreditCard = creditAccounts[0] ?? null;
+      const isManualGroup = accs.some(a => a.isManual === true || a.provider === 'manual');
 
       return `
           <div data-item-id="${itemId}" class="account-card bank-card-liquid flex flex-col relative bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl hover:border-[var(--color-border-light)] transition-all duration-200" style="will-change:transform; transform-origin:center center;">
@@ -741,6 +1094,15 @@ async function loadConnectedAccounts(userId: string) {
           return GenericDropdown({
             id: `dropdown-acc-${rep.id}`,
             items: [
+              ...(isManualGroup ? [{
+                label: 'Criar cartao',
+                icon: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/><path d="M12 14v5"/><path d="M9.5 16.5h5"/></svg>`,
+                id: `btn-create-card-${rep.id}`
+              }, {
+                label: 'Criar poupanca',
+                icon: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"></path><path d="M12 8v6"/><path d="M9 11h6"/></svg>`,
+                id: `btn-create-savings-${rep.id}`
+              }] : []),
               {
                 label: 'Apelidar',
                 icon: `<lottie-player src="${renameLottie}" background="transparent" speed="1" style="width: 18px; height: 18px;" class="lottie-dropdown-icon" autoplay></lottie-player>`,
@@ -805,7 +1167,7 @@ async function loadConnectedAccounts(userId: string) {
                   class="lottie-anim-sync"
                   autoplay loop
                 ></lottie-player>
-                <span class="text-[10px] text-[var(--color-text-secondary)]">Sincronizado ${timeSince(lastSync)}</span>
+                <span class="text-[10px] text-[var(--color-text-secondary)]">${isManualGroup ? `Manual - atualizado ${timeSince(lastSync)}` : `Sincronizado ${timeSince(lastSync)}`}</span>
               </div>
               <button
                 id="${btnDetailsId}"
@@ -819,6 +1181,35 @@ async function loadConnectedAccounts(userId: string) {
             <!-- ── Status da Sincronização ── -->
             <div class="relative border-t border-[var(--color-border-light)] px-5 py-3 bg-[var(--color-background)]/30 group rounded-b-2xl">
               ${(() => {
+          if (isManualGroup) {
+            return `
+                    <div class="relative flex items-center w-full min-h-[28px]">
+                      <button id="btn-create-product-${rep.id}" class="relative z-10 w-full flex items-center justify-between gap-2 py-1 text-[11px] font-bold text-[var(--color-text)] hover:text-[#D97757] transition-all">
+                        <span class="flex items-center gap-2">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                          Criar manual neste banco
+                        </span>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                      </button>
+                      ${GenericDropdown({
+              id: `dropdown-create-product-${rep.id}`,
+              width: '220px',
+              items: [
+                {
+                  label: 'Cartao de credito',
+                  icon: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>`,
+                  id: `btn-create-card-inline-${rep.id}`
+                },
+                {
+                  label: 'Poupanca',
+                  icon: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"></path></svg>`,
+                  id: `btn-create-savings-inline-${rep.id}`
+                }
+              ]
+            })}
+                    </div>
+                  `;
+          }
           const lsDate = new Date(lastSync);
           const hrsSinceSync = (new Date().getTime() - lsDate.getTime()) / (1000 * 60 * 60);
           const hrsRemaining = Math.max(0, 24 - hrsSinceSync);
@@ -906,6 +1297,7 @@ async function loadConnectedAccounts(userId: string) {
       const safeId = itemId.replace(/[^a-zA-Z0-9]/g, '_');
 
       attachGenericDropdownListeners(`trigger-acc-${rep.id}`, `dropdown-acc-${rep.id}`);
+      attachGenericDropdownListeners(`btn-create-product-${rep.id}`, `dropdown-create-product-${rep.id}`);
       document.getElementById(`btn-delete-${rep.id}`)?.addEventListener('click', (e) => {
         e.stopPropagation();
         deleteConnection(itemId);
@@ -913,6 +1305,22 @@ async function loadConnectedAccounts(userId: string) {
       document.getElementById(`btn-rename-${rep.id}`)?.addEventListener('click', (e) => {
         e.stopPropagation();
         renameInstitution(itemId, rep.institution?.name || 'Banco');
+      });
+      document.getElementById(`btn-create-card-${rep.id}`)?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        createManualCard(itemId, rep.institution?.name || 'Banco manual');
+      });
+      document.getElementById(`btn-create-savings-${rep.id}`)?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        createManualSavings(itemId, rep.institution?.name || 'Banco manual');
+      });
+      document.getElementById(`btn-create-card-inline-${rep.id}`)?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        createManualCard(itemId, rep.institution?.name || 'Banco manual');
+      });
+      document.getElementById(`btn-create-savings-inline-${rep.id}`)?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        createManualSavings(itemId, rep.institution?.name || 'Banco manual');
       });
       document.getElementById(`btn-sync-${rep.id}`)?.addEventListener('click', (e) => {
         e.stopPropagation();

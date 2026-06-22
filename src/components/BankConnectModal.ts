@@ -66,9 +66,15 @@ export async function openBankConnectModal() {
   */
 
   const initialContent = `
-    <div id="bank-connectors-container" class="flex flex-col items-center justify-center">
-      <div class="w-8 h-8 border-2 border-[var(--color-text-secondary)] border-t-[var(--color-text)] rounded-full animate-spin"></div>
-      <p class="text-[13px] text-[var(--color-text-secondary)] mt-2">Buscando instituições disponíveis...</p>
+    <div class="flex flex-col w-full h-full">
+      <div id="bank-connectors-container" class="flex flex-col items-center justify-center p-4">
+        <div class="w-8 h-8 border-2 border-[var(--color-text-secondary)] border-t-[var(--color-text)] rounded-full animate-spin"></div>
+        <p class="text-[13px] text-[var(--color-text-secondary)] mt-2">Buscando instituições disponíveis...</p>
+      </div>
+      <div class="w-full border-t border-[var(--color-border-light)] py-3 px-4 flex items-center justify-center gap-2 mt-auto bg-[rgba(255,255,255,0.01)]">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-[var(--color-text-secondary)] opacity-70"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+        <span class="text-[12px] text-[var(--color-text-secondary)]">Conexão segura e regulada pelo Banco Central</span>
+      </div>
     </div>
   `;
 
@@ -78,7 +84,7 @@ export async function openBankConnectModal() {
     showFooter: false,
     showCloseButton: true,
     maxWidth: 'max-w-md',
-    fieldsPadding: 'p-4',
+    fieldsPadding: 'p-0',
     onConfirm: () => { /* Previne fechamento automático pelo form submit */ }
   });
 
@@ -182,7 +188,12 @@ export async function openBankConnectModal() {
               </div>
               <span class="text-[14px] font-medium text-[var(--color-text)]">${connector.name}</span>
             </div>
-            <div class="w-full">${Input({ id: 'credential-input', type: 'text', label: `Informe seu ${isBusiness ? 'CNPJ' : 'CPF'}`, placeholder: isBusiness ? '00.000.000/0000-00' : '000.000.000-00' })}</div>
+            <div class="w-full">
+              ${Input({ id: 'credential-input', type: 'text', label: `Informe seu ${isBusiness ? 'CNPJ' : 'CPF'}`, placeholder: isBusiness ? '00.000.000/0000-00' : '000.000.000-00' })}
+              <p class="text-[12px] text-[var(--color-text-secondary)] opacity-80 mt-2 leading-relaxed">
+                Seu ${isBusiness ? 'CNPJ' : 'CPF'} é usado apenas para identificar sua conta no banco. Não armazenamos esta informação.
+              </p>
+            </div>
             <div class="w-full mt-2">${Button({ id: 'btn-submit-connection', text: 'Continuar', type: 'button' })}</div>
           </div>
         `;

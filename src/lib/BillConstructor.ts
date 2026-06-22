@@ -1166,6 +1166,15 @@ export class BillConstructor {
 
         const storedMonth = normalizeMonthKey(tx?.invoiceMonthKey);
         if (storedMonth) {
+            const isGeneratedManualTransaction =
+                tx?.isManual === true ||
+                tx?.provider === 'manual' ||
+                Boolean(tx?.manualPurchaseId);
+
+            if (isGeneratedManualTransaction && tx?.invoiceMonthKeyManual !== true) {
+                return null;
+            }
+
             return storedMonth;
         }
 

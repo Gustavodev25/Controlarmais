@@ -17,6 +17,7 @@ import { EmptyState, initEmptyStateLotties } from '../components/EmptyState';
 import { Modal } from '../components/Modal';
 import { GenericDropdown, attachGenericDropdownListeners } from '../components/GenericDropdown';
 import { Input } from '../components/Input';
+import { Select, attachSelectListeners } from '../components/Select';
 import { useTheme } from '../components/ThemeManager';
 import {
   BillConstructor,
@@ -27,6 +28,7 @@ import type {
   ComputedFinanceCharge,
   LegacyClosingDateConfig
 } from '../lib/BillConstructor';
+import type { CategoryMapping } from '../types/category';
 import { getPluggyCanonicalDocRef, getPluggyDocRef, loadPluggyRecords, loadPluggyRecordsWithCache } from '../lib/pluggyFirestore';
 import { clearUserCache } from '../lib/indexedDBCache';
 import {
@@ -325,6 +327,107 @@ function hidePageOverlay() {
   }
 }
 
+function isManualTransaction(tx?: any | null): boolean {
+  return tx?.isManual === true || tx?.provider === 'manual' || Boolean(tx?.manualPurchaseId);
+}
+
+async function deleteManualCreditCardTransaction(tx: any, deletePurchase: boolean) {
+  const userId = auth.currentUser?.uid || tx?.userId;
+  if (!userId || !tx?.id || !isManualTransaction(tx)) {
+    toaster.create({ title: 'Erro', description: 'Nao foi possivel identificar o lancamento manual.', type: 'error' });
+    return;
+  }
+
+  const row = document.querySelector(`tr[data-tx-id="${tx.id}"]`);
+  if (row) {
+    const loader = row.querySelector('.cc-row-loader-overlay') as HTMLElement | null;
+    if (loader) {
+      const text = loader.querySelector('p');
+      if (text) text.textContent = 'Excluindo...';
+      loader.classList.add('active');
+    }
+  } else {
+    showPageOverlay('Excluindo lancamento...');
+  }
+
+  try {
+    const shouldDeletePurchase = deletePurchase && tx.manualPurchaseId;
+    const manualTargets = shouldDeletePurchase
+      ? allTransactions.filter((transaction) =>
+        isManualTransaction(transaction) &&
+        transaction.manualPurchaseId === tx.manualPurchaseId &&
+        transaction.accountId === tx.accountId
+      )
+      : [tx];
+
+    const targetIds = new Set(manualTargets.map((transaction) => String(transaction.id)));
+    const relatedRefunds = allTransactions.filter((transaction) =>
+      transaction.isRefund === true &&
+      targetIds.has(String(transaction.originalTransactionId))
+    );
+
+    const deleteTargets = Array.from(
+      new Map([...manualTargets, ...relatedRefunds].map((transaction) => [String(transaction.id), transaction])).values()
+    );
+
+    await Promise.all(deleteTargets.map((transaction) =>
+      deleteDoc(getPluggyCanonicalDocRef(userId, 'creditCardTransactions', String(transaction.id)))
+    ));
+
+    const account = cachedAccountsMap.get(tx.accountId);
+    if (account && isManualAccount(account)) {
+      const deletedIds = new Set(deleteTargets.map((transaction) => String(transaction.id)));
+      const remainingTransactions = allTransactions.filter((transaction) => !deletedIds.has(String(transaction.id)));
+      await updateCardAvailableLimit(userId, account, remainingTransactions);
+    }
+
+    await clearUserCache(userId);
+    toaster.create({
+      title: shouldDeletePurchase ? 'Compra parcelada excluida' : 'Lancamento excluido',
+      description: shouldDeletePurchase
+        ? 'Todas as parcelas manuais foram removidas e o limite foi atualizado.'
+        : 'O lancamento manual foi removido e o limite foi atualizado.',
+      type: 'success'
+    });
+    await loadCreditCardTransactions(userId);
+  } catch (error) {
+    console.error('Erro ao excluir lancamento manual:', error);
+    toaster.create({ title: 'Erro', description: 'Nao foi possivel excluir o lancamento manual.', type: 'error' });
+  } finally {
+    hidePageOverlay();
+  }
+}
+
+function showDeleteManualTransactionModal(tx: any, options: { deletePurchase?: boolean } = {}) {
+  const deletePurchase = options.deletePurchase === true && Boolean(tx.manualPurchaseId);
+  const purchaseInstallments = deletePurchase
+    ? allTransactions.filter((transaction) =>
+      isManualTransaction(transaction) &&
+      transaction.manualPurchaseId === tx.manualPurchaseId &&
+      transaction.accountId === tx.accountId &&
+      transaction.isRefund !== true
+    ).length
+    : 1;
+
+  Modal({
+    title: deletePurchase ? 'Excluir compra parcelada' : 'Excluir lancamento manual',
+    content: `
+      <p class="text-[14px] text-[var(--color-text-secondary)]">
+        ${deletePurchase
+        ? `Tem certeza que deseja excluir esta compra parcelada? As ${purchaseInstallments} parcelas manuais serao removidas.`
+        : 'Tem certeza que deseja excluir este lancamento manual do cartao?'}
+      </p>
+      <p class="text-[13px] text-[var(--color-text-secondary)] mt-2">
+        O limite disponivel do cartao sera recalculado apos a exclusao.
+      </p>
+    `,
+    confirmText: 'Excluir',
+    onConfirm: async () => {
+      await deleteManualCreditCardTransaction(tx, deletePurchase);
+    }
+  });
+}
+
 function showDeleteRefundModal(tx: any) {
   Modal({
     title: 'Excluir Reembolso',
@@ -399,6 +502,8 @@ const FINANCE_CHARGE_LABELS: Record<string, string> = {
   IOF: 'IOF',
   OTHER: 'Outros encargos'
 };
+
+const DELETE_ACTION_ICON = '<svg width="14" height="14" class="text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>';
 
 function toTimeMs(value: any): number {
   if (!value) return 0;
@@ -541,8 +646,213 @@ function getTransactionDisplayInvoiceMonthKey(tx: any, invoices: ComputedBill[])
   return parsedDate ? BillConstructor.toMonthKey(parsedDate) : null;
 }
 
+function findInvoiceByTransactionDate(tx: any, invoices: ComputedBill[]): ComputedBill | undefined {
+  const parsedDate = BillConstructor.parseDate(tx?.date || tx?.creditCardMetadata?.releaseDate);
+  if (!parsedDate) return undefined;
+
+  const transactionTime = parsedDate.getTime();
+  return invoices.find((invoice) => {
+    if (!invoice.periodStart || !invoice.periodEnd) return false;
+
+    const periodStart = new Date(invoice.periodStart);
+    const periodEnd = new Date(invoice.periodEnd);
+    periodStart.setHours(0, 0, 0, 0);
+    periodEnd.setHours(23, 59, 59, 999);
+
+    return transactionTime >= periodStart.getTime() && transactionTime <= periodEnd.getTime();
+  });
+}
+
+function getInvoiceMonthKeyForTransaction(account: any, tx: any, invoices: ComputedBill[] = []): string | null {
+  const hasManualInvoiceOverride = tx?.invoiceMonthKeyManual === true || normalizeMonthKey(tx?.manualInvoiceMonth) !== null;
+  const shouldTrustStoredMonth = !isManualTransaction(tx) || hasManualInvoiceOverride;
+  const existingMonthKey = shouldTrustStoredMonth ? getTransactionInvoiceMonthKey(tx) : null;
+  if (existingMonthKey) return existingMonthKey;
+
+  const matchedInvoice = findInvoiceByTransactionDate(tx, invoices);
+  if (matchedInvoice?.referenceMonth) return matchedInvoice.referenceMonth;
+
+  const parsedDate = BillConstructor.parseDate(tx?.date || tx?.creditCardMetadata?.releaseDate);
+  if (!parsedDate) return null;
+
+  const periods = billConstructor.calculateInvoicePeriodDates(account, []);
+  let year = parsedDate.getFullYear();
+  let month = parsedDate.getMonth();
+
+  if (parsedDate.getDate() > periods.closingDay) {
+    month += 1;
+    if (month > 11) {
+      month = 0;
+      year += 1;
+    }
+  }
+
+  return `${year}-${String(month + 1).padStart(2, '0')}`;
+}
+
+function applyInvoiceFallbackToTransactions(account: any, transactions: any[], invoices: ComputedBill[]): void {
+  transactions.forEach((tx) => {
+    if (tx.computedInvoiceType && tx.computedInvoiceType !== 'unknown') return;
+
+    const invoiceMonthKey = getInvoiceMonthKeyForTransaction(account, tx, invoices);
+    const inferredInvoice = invoiceMonthKey
+      ? invoices.find((invoice) => invoice.referenceMonth === invoiceMonthKey)
+      : findInvoiceByTransactionDate(tx, invoices);
+
+    if (!inferredInvoice) return;
+
+    tx.computedBillName = inferredInvoice.name;
+    tx.computedInvoiceType = inferredInvoice.typeKey;
+    tx.computedInvoiceMonthKey = inferredInvoice.referenceMonth;
+    tx.invoiceMonthKey = tx.invoiceMonthKey || inferredInvoice.referenceMonth;
+
+    const alreadyLinked = inferredInvoice.transactions.some((invoiceTx) => String(invoiceTx.id) === String(tx.id));
+    if (!alreadyLinked) {
+      inferredInvoice.transactions.push(tx);
+    }
+  });
+}
+
+function refreshInvoiceTotals(invoices: ComputedBill[]): void {
+  invoices.forEach((invoice) => {
+    const financeChargesTotal = invoice.financeCharges.reduce((sum, charge) => sum + Number(charge.amount || 0), 0);
+    const transactionTotal = invoice.transactions.reduce((sum, tx) => {
+      if (billConstructor.isInvoicePayment(tx)) return sum;
+      return sum + Number(tx.amount || 0);
+    }, 0);
+    const computedTotal = transactionTotal + financeChargesTotal;
+    const hasInvoiceItems = invoice.transactions.some((tx) => !billConstructor.isInvoicePayment(tx));
+
+    invoice.financeChargesTotal = financeChargesTotal;
+    if (invoice.status === 'OPEN') {
+      invoice.total = hasInvoiceItems || financeChargesTotal > 0
+        ? computedTotal
+        : Number(invoice.pluggyTotal ?? computedTotal);
+      return;
+    }
+
+    if (invoice.pluggyTotal != null) {
+      const manualRefundAdjustment = invoice.transactions
+        .filter((tx) => tx.isRefund === true)
+        .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+      invoice.total = invoice.pluggyTotal + manualRefundAdjustment;
+      return;
+    }
+
+    invoice.total = computedTotal;
+  });
+}
+
 function getInvoiceCountLabel(count: number): string {
   return `${count} transaç${count === 1 ? 'ão' : 'ões'}`;
+}
+
+function parseManualMoney(value: unknown): number {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  const raw = String(value || '').trim();
+  const normalized = raw.includes(',')
+    ? raw.replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, '')
+    : raw.replace(/[^\d.-]/g, '');
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function makeManualId(prefix: string): string {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function todayInputValue(): string {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function normalizeManualDate(value: unknown): string {
+  const raw = String(value || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  return todayInputValue();
+}
+
+function parseManualInstallments(value: unknown): number {
+  const parsed = Number.parseInt(String(value || '').trim(), 10);
+  if (!Number.isFinite(parsed)) return 1;
+  return Math.min(60, Math.max(1, parsed));
+}
+
+function addMonthsToISODate(date: string, monthsToAdd: number): string {
+  const [year, month, day] = date.split('-').map(Number);
+  if (!year || !month || !day) return todayInputValue();
+
+  const target = new Date(year, month - 1 + monthsToAdd, 1, 12, 0, 0, 0);
+  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  target.setDate(Math.min(day, lastDay));
+
+  const nextYear = target.getFullYear();
+  const nextMonth = String(target.getMonth() + 1).padStart(2, '0');
+  const nextDay = String(target.getDate()).padStart(2, '0');
+  return `${nextYear}-${nextMonth}-${nextDay}`;
+}
+
+function splitAmountIntoInstallments(totalAmount: number, installments: number): number[] {
+  const totalCents = Math.round(totalAmount * 100);
+  const baseCents = Math.floor(totalCents / installments);
+  const remainderCents = totalCents % installments;
+
+  return Array.from({ length: installments }, (_, index) => {
+    const installmentCents = baseCents + (index < remainderCents ? 1 : 0);
+    return Number((installmentCents / 100).toFixed(2));
+  });
+}
+
+function getCreditLimitValue(account: any): number {
+  const rawLimit = account?.creditData?.creditLimit ?? account?.creditLimit ?? 0;
+  const limit = Number(rawLimit);
+  return Number.isFinite(limit) ? limit : 0;
+}
+
+function getAvailableCreditValue(account: any): number {
+  const rawAvailable = account?.creditData?.availableCreditLimit ?? account?.availableCreditLimit ?? getCreditLimitValue(account);
+  const available = Number(rawAvailable);
+  return Number.isFinite(available) ? available : 0;
+}
+
+function calculateCreditLimitUsage(transactions: any[]): number {
+  return transactions.reduce((total, transaction) => {
+    if (billConstructor.isInvoicePayment(transaction)) return total;
+    const amount = Number(transaction.amount || 0);
+    return Number.isFinite(amount) ? total + amount : total;
+  }, 0);
+}
+
+function getManualTransactionCategoryData(mappings: CategoryMapping[]) {
+  const validMappings = mappings.filter((mapping) => mapping.originalKey && mapping.displayName);
+  const expenseMappings = validMappings.filter((mapping) => mapping.group !== 'Renda');
+  const selectableMappings = (expenseMappings.length > 0 ? expenseMappings : validMappings)
+    .sort((left, right) => {
+      const groupCompare = String(left.group || '').localeCompare(String(right.group || ''), 'pt-BR');
+      if (groupCompare !== 0) return groupCompare;
+      return String(left.displayName || '').localeCompare(String(right.displayName || ''), 'pt-BR');
+    });
+
+  const byKey = new Map<string, CategoryMapping>();
+  selectableMappings.forEach((mapping) => byKey.set(mapping.originalKey, mapping));
+
+  const defaultMapping =
+    selectableMappings.find((mapping) => mapping.originalKey === 'n/a') ||
+    selectableMappings.find((mapping) => mapping.displayName.toLowerCase() === 'outros') ||
+    selectableMappings[0] ||
+    null;
+
+  return {
+    byKey,
+    defaultValue: defaultMapping?.originalKey || '',
+    options: selectableMappings.map((mapping) => ({
+      value: mapping.originalKey,
+      label: `${mapping.group ? `${mapping.group} - ` : ''}${mapping.displayName}`
+    }))
+  };
 }
 
 // ====================== COMPONENTES ======================
@@ -563,6 +873,9 @@ function CreditCardsContent(): string {
           <div id="card-selector-slot" class="cc-header-card relative"></div>
           <div class="cc-header-actions flex items-center gap-3">
             <div id="closing-date-reminder-container" class="flex items-center"></div>
+            <button id="btn-manual-cc-transaction" class="hidden bg-[#D97757] hover:bg-[#E2886A] text-white px-4 py-2.5 rounded-xl text-[13px] font-bold transition-all duration-200 whitespace-nowrap">
+              Lancamento manual
+            </button>
             <button id="btn-closing-settings" class="bg-[var(--color-surface)] border border-[var(--color-border)] hover:bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)] p-2.5 rounded-xl transition-all duration-200" title="Configurar Fechamento">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <circle cx="12" cy="12" r="3"></circle>
@@ -1835,6 +2148,7 @@ export function renderCreditCards(user: any) {
   `;
 
   attachHeaderListeners();
+  bindManualTransactionButton(user.uid);
   loadCreditCardTransactions(user.uid);
   startPeriodicLotties();
 
@@ -1934,6 +2248,10 @@ function getSelectedInvoiceRows(): InvoiceTableRow[] {
   const account = getSelectedAccount();
   if (!account?.id) return [];
   return invoiceRowsByAccountId.get(account.id) || [];
+}
+
+function isManualAccount(account?: any | null): boolean {
+  return account?.isManual === true || account?.provider === 'manual';
 }
 
 function buildClosingModalBills(account: any, bills: ComputedBill[]): ComputedBill[] {
@@ -2125,6 +2443,238 @@ function bindClosingSettingsButton(userId: string) {
   button.disabled = !getSelectedAccount();
 }
 
+function bindManualTransactionButton(userId: string) {
+  const button = document.getElementById('btn-manual-cc-transaction') as HTMLButtonElement | null;
+  if (!button) return;
+
+  const selectedAccount = getSelectedAccount();
+  const canCreateManualTransaction = isManualAccount(selectedAccount);
+
+  button.classList.toggle('hidden', !canCreateManualTransaction);
+  button.onclick = canCreateManualTransaction
+    ? () => openManualCreditCardTransactionModal(userId)
+    : null;
+}
+
+async function updateCardAvailableLimit(userId: string, account: any, transactions: any[]): Promise<number> {
+  const creditLimit = getCreditLimitValue(account);
+  if (creditLimit <= 0) return getAvailableCreditValue(account);
+
+  const usedLimit = calculateCreditLimitUsage(transactions.filter((transaction) => transaction.accountId === account.id));
+  const availableLimit = Math.max(0, creditLimit - usedLimit);
+  const nextCreditData = {
+    ...(account.creditData || {}),
+    creditLimit,
+    availableCreditLimit: availableLimit,
+    balance: usedLimit
+  };
+
+  await setDoc(getPluggyCanonicalDocRef(userId, 'accounts', account.id), {
+    userId,
+    creditData: nextCreditData,
+    balance: usedLimit,
+    updatedAt: new Date().toISOString()
+  }, { merge: true });
+
+  account.creditData = nextCreditData;
+  account.balance = usedLimit;
+  cachedAccountsMap.set(account.id, account);
+  return availableLimit;
+}
+
+async function openManualCreditCardTransactionModal(userId: string) {
+  const account = getSelectedAccount();
+  if (!account) {
+    toaster.create({ title: 'Nenhum cartao', description: 'Crie ou selecione um cartao antes de lancar uma compra.', type: 'warning' });
+    return;
+  }
+
+  if (!isManualAccount(account)) {
+    toaster.create({ title: 'Cartao sincronizado', description: 'Lancamentos manuais ficam disponiveis apenas para cartoes manuais.', type: 'warning' });
+    return;
+  }
+
+  const availableCredit = getAvailableCreditValue(account);
+  const limit = getCreditLimitValue(account);
+  let categoryData: ReturnType<typeof getManualTransactionCategoryData>;
+
+  try {
+    categoryData = getManualTransactionCategoryData(await CategoryService.ensureCategoryMappings(userId));
+  } catch (error) {
+    console.error('Erro ao carregar categorias para lancamento manual:', error);
+    toaster.create({ title: 'Erro', description: 'Nao foi possivel carregar as categorias do Firebase.', type: 'error' });
+    return;
+  }
+
+  if (categoryData.options.length === 0) {
+    toaster.create({ title: 'Sem categorias', description: 'Cadastre categorias antes de criar lancamentos manuais.', type: 'warning' });
+    return;
+  }
+
+  Modal({
+    title: 'Lancamento manual',
+    confirmText: 'Salvar lancamento',
+    showCancel: true,
+    content: `
+      <div class="space-y-4">
+        <div class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-hover)] px-4 py-3">
+          <p class="text-[11px] text-[var(--color-text-secondary)] mb-1">Cartao selecionado</p>
+          <div class="flex items-center justify-between gap-3">
+            <span class="text-[13px] font-semibold text-[var(--color-text)] truncate">${getAccountDisplayName(account)}</span>
+            ${limit > 0 ? `<span class="text-[12px] text-[var(--color-text-secondary)] whitespace-nowrap">Disponivel: R$ ${availableCredit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>` : ''}
+          </div>
+        </div>
+        ${Input({
+      id: 'manual-cc-description',
+      label: 'Descricao',
+      type: 'text',
+      required: true,
+      placeholder: 'Ex: Mercado, farmacia, assinatura'
+    })}
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          ${Input({
+      id: 'manual-cc-amount',
+      label: 'Valor',
+      type: 'number',
+      required: true,
+      inputmode: 'decimal',
+      placeholder: '0,00'
+    })}
+          ${Input({
+      id: 'manual-cc-installments',
+      label: 'Parcelas',
+      type: 'number',
+      required: true,
+      value: '1',
+      inputmode: 'numeric',
+      placeholder: '1'
+    })}
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          ${Input({
+      id: 'manual-cc-date',
+      label: 'Data',
+      type: 'date',
+      required: true,
+      value: todayInputValue()
+    })}
+          ${Select({
+      id: 'manual-cc-category',
+      label: 'Categoria',
+      value: categoryData.defaultValue,
+      options: categoryData.options
+    })}
+        </div>
+      </div>
+    `,
+    onConfirm: async (data: any) => {
+      const currentAccount = getSelectedAccount();
+      if (!currentAccount) {
+        toaster.create({ title: 'Nenhum cartao', description: 'Selecione um cartao valido.', type: 'error' });
+        throw new Error('PREVENT_CLOSE');
+      }
+
+      if (!isManualAccount(currentAccount)) {
+        toaster.create({ title: 'Cartao sincronizado', description: 'Selecione um cartao manual para criar lancamentos manuais.', type: 'warning' });
+        throw new Error('PREVENT_CLOSE');
+      }
+
+      const description = String(data['manual-cc-description'] || '').trim();
+      const amount = Math.abs(parseManualMoney(data['manual-cc-amount']));
+      const installments = parseManualInstallments(data['manual-cc-installments']);
+      const date = normalizeManualDate(data['manual-cc-date']);
+      const category = String(data['manual-cc-category'] || '').trim();
+      const selectedCategory = categoryData.byKey.get(category);
+
+      if (!description || amount <= 0) {
+        toaster.create({ title: 'Dados invalidos', description: 'Informe descricao e valor maior que zero.', type: 'error' });
+        throw new Error('PREVENT_CLOSE');
+      }
+
+      if (!selectedCategory) {
+        toaster.create({ title: 'Categoria obrigatoria', description: 'Selecione uma categoria cadastrada no Firebase.', type: 'error' });
+        throw new Error('PREVENT_CLOSE');
+      }
+
+      const currentAvailable = getAvailableCreditValue(currentAccount);
+      const currentLimit = getCreditLimitValue(currentAccount);
+      if (currentLimit > 0 && amount > currentAvailable) {
+        toaster.create({ title: 'Limite insuficiente', description: 'O valor ultrapassa o limite disponivel do cartao.', type: 'warning' });
+        throw new Error('PREVENT_CLOSE');
+      }
+
+      const now = new Date().toISOString();
+      const purchaseId = makeManualId('manual_cc_purchase');
+      const installmentAmounts = splitAmountIntoInstallments(amount, installments);
+      const currentInvoices = getSelectedInvoices();
+      const transactions = installmentAmounts.map((installmentAmount, index) => {
+        const installmentNumber = index + 1;
+        const installmentDate = addMonthsToISODate(date, index);
+        const transactionId = installments === 1
+          ? purchaseId.replace('manual_cc_purchase', 'manual_cc_tx')
+          : `${purchaseId.replace('manual_cc_purchase', 'manual_cc_tx')}_${String(installmentNumber).padStart(2, '0')}`;
+        const invoiceMonthKey = getInvoiceMonthKeyForTransaction(currentAccount, {
+          date: installmentDate,
+          creditCardMetadata: { releaseDate: installmentDate }
+        }, currentInvoices);
+
+        return {
+          id: transactionId,
+          userId,
+          accountId: currentAccount.id,
+          pluggyAccountId: currentAccount.id,
+          itemId: currentAccount.itemId || currentAccount.id,
+          description,
+          amount: installmentAmount,
+          date: installmentDate,
+          category,
+          categoryId: selectedCategory.id || selectedCategory.originalKey,
+          categoryName: selectedCategory.displayName,
+          type: 'DEBIT',
+          status: 'CONFIRMED',
+          isManual: true,
+          provider: 'manual',
+          currencyCode: 'BRL',
+          manualPurchaseId: purchaseId,
+          purchaseAmount: amount,
+          installmentNumber,
+          totalInstallments: installments,
+          ...(invoiceMonthKey ? { invoiceMonthKey } : {}),
+          creditCardMetadata: {
+            releaseDate: installmentDate,
+            purchaseDate: date,
+            purchaseAmount: amount,
+            installmentNumber,
+            totalInstallments: installments,
+            billId: null
+          },
+          createdAt: now,
+          updatedAt: now
+        };
+      });
+
+      await Promise.all(transactions.map((transaction) =>
+        setDoc(getPluggyCanonicalDocRef(userId, 'creditCardTransactions', transaction.id), transaction)
+      ));
+      await updateCardAvailableLimit(userId, currentAccount, [...getSelectedTransactions(), ...transactions]);
+      await clearUserCache(userId);
+
+      toaster.create({
+        title: installments > 1 ? 'Compra parcelada criada' : 'Lancamento criado',
+        description: installments > 1
+          ? `A compra foi lancada em ${installments} parcelas e o limite disponivel foi atualizado.`
+          : 'O valor foi lancado e o limite disponivel foi atualizado.',
+        type: 'success'
+      });
+      await loadCreditCardTransactions(userId);
+    }
+  });
+
+  setTimeout(() => {
+    attachSelectListeners('manual-cc-category');
+  }, 50);
+}
+
 function renderCardSelector(userId: string, direction: DynamicDirection = 'reset') {
   const accounts = getSortedAccounts();
   const selectedAccount = getSelectedAccount();
@@ -2144,6 +2694,11 @@ function renderCardSelector(userId: string, direction: DynamicDirection = 'reset
     onNextCard: (accountId: string) => {
       selectedAccountId = accountId;
       updateSelectedAccountView(userId, 'next');
+    },
+    onSelectCard: (accountId: string) => {
+      if (accountId === selectedAccount?.id) return;
+      selectedAccountId = accountId;
+      updateSelectedAccountView(userId, 'reset');
     }
   }, direction);
 }
@@ -2151,6 +2706,7 @@ function renderCardSelector(userId: string, direction: DynamicDirection = 'reset
 function updateSelectedAccountView(userId: string, direction: DynamicDirection = 'reset') {
   renderCardSelector(userId, direction);
   bindClosingSettingsButton(userId);
+  bindManualTransactionButton(userId);
   updateSummaryCards();
   renderClosingDateReminder(userId);
   setActiveSummaryCard(currentFilter);
@@ -2231,6 +2787,8 @@ function processLoadedData(
       }
     }
 
+    applyInvoiceFallbackToTransactions(accData, accountTxs, invoices);
+    refreshInvoiceTotals(invoices);
     invoiceRowsByAccountId.set(accId, buildInvoiceTableRows(accId, accountTxs, invoices));
   }
 
@@ -2244,6 +2802,7 @@ function renderLoadedView(userId: string) {
     updateSummaryCards();
     renderCardSelector(userId);
     bindClosingSettingsButton(userId);
+    bindManualTransactionButton(userId);
     renderClosingDateReminder(userId);
     renderFilteredTransactions(currentFilter);
     return;
@@ -2425,6 +2984,12 @@ function attachRowListeners(rows: InvoiceTableRow[], startIdx: number, endIdx: n
       });
       document.getElementById(`tx-action-refund-custom-${tx.id}`)?.addEventListener('click', () => {
         (window as any).openRefundCustom(tx);
+      });
+      document.getElementById(`tx-action-delete-manual-${tx.id}`)?.addEventListener('click', () => {
+        showDeleteManualTransactionModal(tx);
+      });
+      document.getElementById(`tx-action-delete-manual-purchase-${tx.id}`)?.addEventListener('click', () => {
+        showDeleteManualTransactionModal(tx, { deletePurchase: true });
       });
 
       if (tx.isRefund) {
@@ -2883,6 +3448,7 @@ function renderTransactionRow(tx: any, accountsMap: Map<string, any>, allRows?: 
   if (isPayment) rowClasses.push('cc-row-payment');
 
   const actionItems = [];
+  const canDeleteManualTransaction = isManualTransaction(tx) && tx.isRefund !== true;
 
   if (currentUserIsAdmin) {
     actionItems.push({ id: `tx-action-detail-${tx.id}`, label: 'Ver JSON', icon: '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"></path><path d="M13 2v7h7"></path></svg>' });
@@ -2893,6 +3459,21 @@ function renderTransactionRow(tx: any, accountsMap: Map<string, any>, allRows?: 
   } else {
     actionItems.push({ id: `tx-action-refund-total-${tx.id}`, label: 'Reembolsar Valor Total', icon: '<svg width="14" height="14" class="text-[#10b981]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>' });
     actionItems.push({ id: `tx-action-refund-custom-${tx.id}`, label: 'Reembolsar Personalizado', icon: '<svg width="14" height="14" class="text-[#f59e0b]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>' });
+    if (canDeleteManualTransaction) {
+      actionItems.push({
+        id: `tx-action-delete-manual-${tx.id}`,
+        label: isInstallment ? 'Excluir esta parcela' : 'Excluir lancamento',
+        icon: DELETE_ACTION_ICON
+      });
+
+      if (isInstallment && tx.manualPurchaseId) {
+        actionItems.push({
+          id: `tx-action-delete-manual-purchase-${tx.id}`,
+          label: 'Excluir compra parcelada',
+          icon: DELETE_ACTION_ICON
+        });
+      }
+    }
   }
 
   // Banner "Estornado" — aparece acima da transação original quando há reembolso logo abaixo
@@ -3491,4 +4072,3 @@ async function updateTransactionInvoice(
     };
   }
 };
-

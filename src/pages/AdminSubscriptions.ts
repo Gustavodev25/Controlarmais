@@ -112,7 +112,7 @@ function isPayingClient(userItem: any): boolean {
   if (userItem.isVerified !== true) return false;
   if (isTrialClient(userItem)) return false;
   const p = normalizeProviderKey(userItem.provider);
-  if (p !== 'asaas' && p !== 'stripe') return false;
+  if (!['asaas', 'stripe', 'apple', 'android'].includes(p)) return false;
   const status = getProviderStatus(userItem);
   return status === 'active';
 }
@@ -640,11 +640,22 @@ function isSevenDayTrial(userItem: any): boolean {
 
 function isConvertedClient(userItem: any): boolean {
   if (isPayingClient(userItem)) return true;
-  if (userItem.firstPaidAt || userItem.firstPaidDate || userItem.convertedToPaidAt || userItem.convertedToPaidDate) return true;
+  if (userItem.firstPaidAt || userItem.firstPaidDate || userItem.convertedToPaidAt || userItem.convertedToPaidDate) {
+    // Só conta como convertido se tem gateway verificado
+    const provider = normalizeProviderKey(userItem.provider);
+    if (isVerifiableProvider(provider) && userItem.isVerified === true) return true;
+    // Se tem provider verificável mas sem verificação, ignora campos de data (podem ser incorretos)
+    if (isVerifiableProvider(provider)) return false;
+    return true;
+  }
 
   const plan = normalizeValue(userItem.plan);
   const status = getProviderStatus(userItem);
-  return plan === 'pro' && ['active', 'overdue', 'past_due', 'canceled', 'cancelled', 'unpaid'].includes(status);
+  // Só marca como convertido via plan+status se tem gateway verificado
+  if (plan === 'pro' && ['active', 'overdue', 'past_due', 'canceled', 'cancelled', 'unpaid'].includes(status)) {
+    return userItem.isVerified === true;
+  }
+  return false;
 }
 
 function isConvertedCanceledClient(userItem: any): boolean {
@@ -674,6 +685,11 @@ function getTrialStatusKey(userItem: any): 'active' | 'canceled_active' | 'expir
   }
 
   if (FINISHED_TRIAL_STATUSES.has(trialStatus)) return 'expired';
+
+  // IAP sem dados de trial registrados mas com acesso recente → trial não rastreado
+  const accessDays = getLastAccessDays(userItem);
+  if (accessDays !== null && accessDays <= 14) return 'active';
+
   return 'none';
 }
 
@@ -697,6 +713,19 @@ function getSubscriptionStatusKey(userItem: any): SubscriptionStatusKey {
   if (['canceled', 'cancelled'].includes(providerStatus)) return 'canceled';
   if (isTrialClient(userItem) || providerStatus === 'trialing') return 'trialing';
   if (isPayingClient(userItem) || (normalizeValue(userItem.plan) === 'pro' && providerStatus === 'active')) return 'active';
+
+  // Clientes com trial de loja (IAP Android/Apple) que ainda estão no período
+  // devem ser considerados "trialing" mesmo sem verificação de gateway
+  if (hasStoreTrialSignal(userItem)) {
+    const trialDays = getTrialDaysRemaining(userItem);
+    const trialStatus = getTrialLifecycleStatus(userItem);
+    if (trialDays !== null && trialDays >= 0) return 'trialing';
+    if (ACTIVE_TRIAL_STATUSES.has(trialStatus)) return 'trialing';
+    // Sem dados de trial registrados mas com acesso recente → provável trial não rastreado
+    const accessDays = getLastAccessDays(userItem);
+    if (accessDays !== null && accessDays <= 14) return 'trialing';
+  }
+
   return 'inactive';
 }
 
@@ -812,8 +841,12 @@ function showFunnelModal(userItem: any) {
   const trialLabel = trialStatus === 'active' ? 'Trial ativo' : trialStatus === 'canceled_active' ? 'Cancela no fim' : trialStatus === 'expired' ? 'Trial expirado' : trialStatus === 'converted' ? 'Convertido' : 'Sem trial';
   const trialClass = trialStatus === 'active' ? 'cc-fbg-good' : trialStatus === 'canceled_active' ? 'cc-fbg-warn' : trialStatus === 'expired' ? 'cc-fbg-warn' : trialStatus === 'converted' ? 'cc-fbg-info' : 'cc-fbg-muted';
 
-  const clientLabel = subStatus === 'active' ? 'Pagante' : subStatus === 'trialing' ? 'Trial ativo' : 'Inativo';
-  const clientClass = subStatus === 'active' ? 'cc-fbg-good' : subStatus === 'trialing' ? 'cc-fbg-info' : 'cc-fbg-muted';
+  // Considera acesso recente para label de cliente no funil
+  const accessDaysForFunnel = getLastAccessDays(userItem);
+  const isRecentlyActive = accessDaysForFunnel !== null && accessDaysForFunnel <= 7;
+
+  const clientLabel = subStatus === 'active' ? 'Pagante' : subStatus === 'trialing' ? 'Trial ativo' : isRecentlyActive ? 'Ativo (free)' : 'Inativo';
+  const clientClass = subStatus === 'active' ? 'cc-fbg-good' : subStatus === 'trialing' ? 'cc-fbg-info' : isRecentlyActive ? 'cc-fbg-info' : 'cc-fbg-muted';
 
   const isVerified = userItem.isVerified === true;
   const provider = normalizeProviderKey(userItem.provider);
