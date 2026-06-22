@@ -41,6 +41,8 @@ interface Transaction {
   accountType?: string;
   categoryId?: string;
   category?: string;
+  isManual?: boolean;
+  provider?: string;
 }
 
 const EXCLUDED_ACCOUNT_TYPES = new Set([
