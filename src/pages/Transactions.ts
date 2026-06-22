@@ -3,8 +3,12 @@ import { BrilhoHeader } from '../components/BrilhoHeader';
 import { EmptyState, initEmptyStateLotties } from '../components/EmptyState';
 import { CategoryService } from '../services/categoryService';
 import { getCategoryName } from '../lib/categoryUtils';
-
-
+import { auth } from '../lib/firebase';
+import { setDoc, doc, deleteDoc } from 'firebase/firestore';
+import { getPluggyCanonicalDocRef } from '../lib/pluggyFirestore';
+import { Modal } from '../components/Modal';
+import { Input } from '../components/Input';
+import { Select, attachSelectListeners } from '../components/Select';
 
 import { toaster } from '../components/Toast';
 import gsap from 'gsap';
@@ -637,6 +641,13 @@ export function renderTransactions(user: any) {
                     `
                   })}
                 </div>
+                
+                <button id="btn-manual-transaction" class="hidden bg-[#D97757] hover:bg-[#E2886A] text-white px-4 py-2.5 rounded-xl text-[13px] font-bold transition-all duration-200 whitespace-nowrap">
+                  <div class="flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    Adicionar
+                  </div>
+                </button>
             </div>
           </div>
           </div>
@@ -664,6 +675,13 @@ export function renderTransactions(user: any) {
       renderFilteredTransactions(value);
     }
   });
+
+  const btnManual = document.getElementById('btn-manual-transaction');
+  if (btnManual) {
+    btnManual.addEventListener('click', () => {
+      if (user?.uid) openManualTransactionModal(user.uid);
+    });
+  }
 
   // Search listeners (outside table container)
   const searchInput = document.getElementById('tx-search-input') as HTMLInputElement;
@@ -1009,9 +1027,15 @@ function renderFilteredTransactions(filter: string) {
                         const catName = getCategoryName(tx, categoryMap);
                         const dateObj = new Date(tx.date);
                         const displayDate = dateObj.toLocaleDateString('pt-BR');
+                        const isManual = tx.isManual === true || tx.provider === 'manual';
+                        const deleteBtnHtml = isManual ? `
+                          <button class="tx-delete-btn ml-2 text-red-500 opacity-50 hover:opacity-100 transition-opacity flex-shrink-0" data-id="${tx.id}" title="Excluir">
+                            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                          </button>
+                        ` : '';
 
                         return `
-                          <tr class="cc-row" data-tx-id="${tx.id}">
+                          <tr class="cc-row group relative" data-tx-id="${tx.id}">
                             <td class="tx-cell-date">
                               ${displayDate}
                             </td>
@@ -1024,7 +1048,10 @@ function renderFilteredTransactions(filter: string) {
                               <span class="cc-category">${catName}</span>
                             </td>
                             <td class="tx-cell-amount">
-                              <span class="cc-amount ${amountColor}">${sign}${formatBRL(Math.abs(displayAmount))}</span>
+                              <div class="flex items-center justify-end">
+                                <span class="cc-amount ${amountColor}">${sign}${formatBRL(Math.abs(displayAmount))}</span>
+                                ${deleteBtnHtml}
+                              </div>
                             </td>
                           </tr>
                         `;
@@ -1040,6 +1067,14 @@ function renderFilteredTransactions(filter: string) {
     { opacity: 0, y: 15 },
     { opacity: 1, y: 0, duration: 0.4, ease: 'power2.out' }
   );
+
+  document.querySelectorAll('.tx-delete-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.getAttribute('data-id');
+      if (id) showDeleteManualTransactionModal(id);
+    });
+  });
 }
 
 function renderAccountSelector() {
@@ -1079,6 +1114,16 @@ function renderAccountSelector() {
     hidden: false
   });
 
+  const hasManualAccounts = getEligibleAccounts().some(isManualAccount);
+  const btnManual = document.getElementById('btn-manual-transaction');
+  if (btnManual) {
+    if (hasManualAccounts) {
+      btnManual.classList.remove('hidden');
+    } else {
+      btnManual.classList.add('hidden');
+    }
+  }
+
   // Listeners
   const prevBtn = document.getElementById('tx-acc-prev');
   const nextBtn = document.getElementById('tx-acc-next');
@@ -1100,12 +1145,236 @@ function updateAccountSelectorUI(name: string, direction: any) {
   const label = document.querySelector('.account-selector-label');
   if (label) label.textContent = name;
 
+  const hasManualAccounts = getEligibleAccounts().some(isManualAccount);
+  const currentAccount = cachedAccountsById.get(selectedAccountId);
+  const btnManual = document.getElementById('btn-manual-transaction');
+  if (btnManual) {
+    if (hasManualAccounts) {
+      btnManual.classList.remove('hidden');
+    } else {
+      btnManual.classList.add('hidden');
+    }
+  }
+
   animateDynamicIslandTransition({
     containerId: 'tx-acc-selector-island',
     contentWrapperId: 'tx-acc-content',
     direction,
     onMidpoint: () => {
       renderFilteredTransactions(currentTypeFilter);
+    }
+  });
+}
+
+// --- Manual Transactions Helpers ---
+
+function isManualAccount(account: any): boolean {
+  return account?.isManual === true || account?.provider === 'manual';
+}
+
+function parseManualMoney(value: unknown): number {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  const raw = String(value || '').trim();
+  const normalized = raw.includes(',')
+    ? raw.replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, '')
+    : raw.replace(/[^\d.-]/g, '');
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function makeManualId(prefix: string): string {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function todayInputValue(): string {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function normalizeManualDate(value: unknown): string {
+  const raw = String(value || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  return todayInputValue();
+}
+
+async function openManualTransactionModal(userId: string) {
+  const manualAccounts = getEligibleAccounts().filter(isManualAccount);
+
+  if (manualAccounts.length === 0) {
+    toaster.create({ title: 'Atenção', description: 'Você precisa ter pelo menos uma conta manual para adicionar transações.', type: 'warning' });
+    return;
+  }
+
+  let initialAccountId = manualAccounts[0].id;
+  if (selectedAccountId !== 'ALL' && manualAccounts.some(a => a.id === selectedAccountId)) {
+    initialAccountId = selectedAccountId;
+  }
+
+  let categoryData: any;
+  try {
+    const mappings = await CategoryService.ensureCategoryMappings(userId);
+    const options = [];
+    const byKey = new Map();
+    let defaultVal = '';
+    const entries = Object.entries(mappings || {});
+    for (const [key, val] of entries) {
+      if (!val || typeof val !== 'object') continue;
+      const item = val as any;
+      if (item.isHidden) continue;
+      options.push({ label: item.displayName || key, value: key });
+      byKey.set(key, item);
+      if (!defaultVal || key === 'other') defaultVal = key;
+    }
+    options.sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
+    if (!defaultVal && options.length > 0) defaultVal = options[0].value;
+    categoryData = { options, byKey, defaultValue: defaultVal };
+  } catch (error) {
+    console.error('Erro ao carregar categorias para lancamento manual:', error);
+    toaster.create({ title: 'Erro', description: 'Não foi possível carregar as categorias.', type: 'error' });
+    return;
+  }
+
+  const accountOptions = manualAccounts.map(acc => ({ label: acc.name || 'Conta', value: acc.id }));
+
+  Modal({
+    title: 'Lançamento manual',
+    confirmText: 'Salvar lançamento',
+    showCancel: true,
+    content: `
+      <div class="space-y-4">
+        <div class="grid grid-cols-1 gap-3">
+          ${Select({
+            id: 'manual-tx-account',
+            label: 'Conta',
+            value: initialAccountId,
+            options: accountOptions
+          })}
+        </div>
+        ${Input({
+          id: 'manual-tx-description',
+          label: 'Descrição',
+          type: 'text',
+          required: true,
+          placeholder: 'Ex: Mercado, salário, transferência'
+        })}
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          ${Input({
+            id: 'manual-tx-amount',
+            label: 'Valor',
+            type: 'number',
+            required: true,
+            inputmode: 'decimal',
+            placeholder: '0,00'
+          })}
+          ${Select({
+            id: 'manual-tx-type',
+            label: 'Tipo',
+            value: 'DEBIT',
+            options: [
+              { label: 'Saída', value: 'DEBIT' },
+              { label: 'Entrada', value: 'CREDIT' }
+            ]
+          })}
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          ${Input({
+            id: 'manual-tx-date',
+            label: 'Data',
+            type: 'date',
+            required: true,
+            value: todayInputValue()
+          })}
+          ${Select({
+            id: 'manual-tx-category',
+            label: 'Categoria',
+            value: categoryData.defaultValue,
+            options: categoryData.options
+          })}
+        </div>
+      </div>
+    `,
+    onConfirm: async (data: any) => {
+      const description = String(data['manual-tx-description'] || '').trim();
+      const amount = Math.abs(parseManualMoney(data['manual-tx-amount']));
+      const date = normalizeManualDate(data['manual-tx-date']);
+      const category = String(data['manual-tx-category'] || '').trim();
+      const type = data['manual-tx-type'] === 'CREDIT' ? 'CREDIT' : 'DEBIT';
+      const chosenAccountId = data['manual-tx-account'];
+      const selectedCategory = categoryData.byKey.get(category);
+
+      const chosenAccount = manualAccounts.find(a => a.id === chosenAccountId);
+
+      if (!chosenAccount) {
+        toaster.create({ title: 'Erro', description: 'Conta selecionada não é válida.', type: 'error' });
+        throw new Error('PREVENT_CLOSE');
+      }
+
+      if (!description || amount <= 0) {
+        toaster.create({ title: 'Dados inválidos', description: 'Informe descrição e valor maior que zero.', type: 'error' });
+        throw new Error('PREVENT_CLOSE');
+      }
+
+      const txId = makeManualId('manual_tx');
+      
+      const transactionData = {
+        id: txId,
+        userId,
+        accountId: chosenAccount.id,
+        pluggyAccountId: chosenAccount.id,
+        itemId: chosenAccount.itemId || chosenAccount.id,
+        description,
+        amount,
+        date: `${date}T12:00:00.000Z`,
+        category,
+        categoryId: selectedCategory?.id || selectedCategory?.originalKey || category,
+        categoryName: selectedCategory?.displayName || category,
+        type,
+        status: 'POSTED',
+        isManual: true,
+        provider: 'manual',
+        currencyCode: 'BRL',
+        createdAt: new Date().toISOString()
+      };
+
+      try {
+        const docRef = getPluggyCanonicalDocRef(userId, 'transactions', txId);
+        await setDoc(docRef, transactionData);
+        toaster.create({ title: 'Sucesso', description: 'Lançamento adicionado com sucesso.', type: 'success' });
+        await loadTransactions(userId);
+      } catch (error) {
+        console.error('Erro ao salvar lançamento manual:', error);
+        toaster.create({ title: 'Erro', description: 'Não foi possível salvar.', type: 'error' });
+      }
+    }
+  });
+
+  setTimeout(() => {
+    attachSelectListeners('manual-tx-account');
+    attachSelectListeners('manual-tx-type');
+    attachSelectListeners('manual-tx-category');
+  }, 50);
+}
+
+function showDeleteManualTransactionModal(txId: string) {
+  Modal({
+    title: 'Excluir lançamento manual',
+    content: '<p class="text-[14px] text-[var(--color-text-secondary)]">Tem certeza que deseja excluir este lançamento?</p>',
+    confirmText: 'Excluir',
+    onConfirm: async () => {
+      try {
+        const user = auth.currentUser;
+        if (!user) return;
+        const docRef = getPluggyCanonicalDocRef(user.uid, 'transactions', txId);
+        await deleteDoc(docRef);
+        toaster.create({ title: 'Sucesso', description: 'Lançamento excluído.', type: 'success' });
+        await loadTransactions(user.uid);
+      } catch (err) {
+        console.error('Erro ao excluir:', err);
+        toaster.create({ title: 'Erro', description: 'Não foi possível excluir.', type: 'error' });
+      }
     }
   });
 }

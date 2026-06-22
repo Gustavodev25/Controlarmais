@@ -4,6 +4,7 @@ import { toaster } from '../../components/Toast';
 import { Input } from '../../components/Input';
 import { Select, attachSelectListeners } from '../../components/Select';
 import { type FinanceiroConfig, type DescontoPersonalizado, calcularPrevisaoFinanceira } from '../../lib/financeiroUtils';
+import { loadOverviewToggles, saveOverviewToggles } from '../../components/OverviewConfigDropdown';
 
 let financeiroState: FinanceiroConfig = {
   salarioBase: 0,
@@ -409,6 +410,24 @@ async function saveFinanceiroData() {
         updatedAt: new Date().toISOString(),
       },
     }, { merge: true });
+
+    // Auto-enable overview toggles so the saved values appear on Dashboard cards
+    if (currentUserId) {
+      const toggles = loadOverviewToggles(currentUserId);
+      let toggled = false;
+      if (salarioBase > 0 && !toggles.salario) {
+        toggles.salario = true;
+        toggled = true;
+      }
+      if (habilitarVale && !toggles.vale) {
+        toggles.vale = true;
+        toggled = true;
+      }
+      if (toggled) {
+        saveOverviewToggles(currentUserId, toggles);
+      }
+    }
+
     toaster.create({ title: 'Salvo!', description: 'Configurações financeiras atualizadas.', type: 'success' });
   } catch (err) {
     console.error('[FinanceiroTab] Erro ao salvar:', err);
