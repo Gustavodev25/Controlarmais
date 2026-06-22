@@ -77,7 +77,8 @@ export function renderSettings(user: any, initialTab: 'profile' | 'security' | '
   // Listen to Firestore user data
   const unsubFirestore = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
     if (docSnap.exists()) {
-      userData = docSnap.data();
+      // docSnap.data() NÃO inclui o ID do documento — precisamos injetar manualmente
+      userData = { uid: user.uid, ...docSnap.data() };
       // Não re-renderiza a aba financeiro se acabou de salvar (evita sobrescrever dados)
       if (activeTab === 'financeiro' && isFinanceiroSaving()) {
         return;
