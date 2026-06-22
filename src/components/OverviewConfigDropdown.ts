@@ -60,6 +60,14 @@ export function OverviewConfigDropdown(toggles: OverviewToggleState): string {
         </div>
         ${switchItem('assinatura', 'Assinaturas', toggles.assinatura, icons.assinatura)}
         ${switchItem('lembretes', 'Lembretes', toggles.lembretes, icons.lembretes)}
+        <div class="mx-3 my-1.5 border-t border-[var(--color-border-light)]"></div>
+        <button id="btn-goto-financeiro" class="flex items-center gap-3 w-full px-3 py-2.5 rounded-[11px] cursor-pointer hover:bg-[var(--color-surface-hover)] transition-colors duration-150 group text-left">
+          <span class="text-[var(--color-text-secondary)] group-hover:text-[#D97757] transition-colors duration-150 shrink-0 w-4 h-4 flex items-center justify-center">
+            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          </span>
+          <span class="text-[13px] font-medium text-[var(--color-text)] tracking-[-0.01em] leading-none group-hover:text-[#D97757] transition-colors duration-150">Financeiro</span>
+          <svg class="ml-auto text-[var(--color-text-secondary)]/40 group-hover:text-[#D97757]/60 group-hover:translate-x-0.5 transition-all duration-150" width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+        </button>
       </div>
     </div>
   `;
@@ -144,6 +152,14 @@ export function attachOverviewConfigListeners(
       if (!key) return;
       onToggle(key, input.checked);
     });
+  });
+
+  // Shortcut button: navigate to Financeiro settings
+  const btnGotoFinanceiro = document.getElementById('btn-goto-financeiro');
+  btnGotoFinanceiro?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    close();
+    window.dispatchEvent(new CustomEvent('app-navigate', { detail: { page: 'settings', tab: 'financeiro' } }));
   });
 
   // Close on outside click

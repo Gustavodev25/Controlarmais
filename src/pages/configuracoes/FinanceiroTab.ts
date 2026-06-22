@@ -20,12 +20,20 @@ let currentUserId: string = '';
 let initializedForUser: string = '';
 let dataLoadedForUser: string = ''; // UID para quem já carregamos dados reais do Firebase
 let isDirty: boolean = false; // usuário fez alterações locais não salvas
+let saveTimestamp: number = 0; // timestamp de quando os dados foram salvos
+const SAVE_GUARD_MS = 3000; // ignora recargas do onSnapshot por 3s após salvar
 
 /** Chame ao iniciar o Settings para garantir que dados frescos do Firestore sejam carregados */
 export function resetFinanceiroSession() {
   initializedForUser = '';
   dataLoadedForUser = '';
   isDirty = false;
+  saveTimestamp = 0;
+}
+
+/** Retorna true se o financeiro acabou de salvar e não deve ser re-renderizado */
+export function isFinanceiroSaving(): boolean {
+  return saveTimestamp > 0 && (Date.now() - saveTimestamp) < SAVE_GUARD_MS;
 }
 
 // Converte "5th_business", "15th", ou número → número
@@ -71,7 +79,9 @@ export function FinanceiroTab(userData: any) {
 
   // Lê do Firebase se: (1) usuário diferente, (2) ainda não carregamos dados reais para este usuário
   // ou (3) sessão foi resetada (nova abertura de Settings) e usuário não fez alterações locais
-  const shouldLoad = userData && !isDirty && (
+  // Guarda: após salvar, ignora recargas do onSnapshot por SAVE_GUARD_MS
+  const isWithinSaveGuard = saveTimestamp > 0 && (Date.now() - saveTimestamp) < SAVE_GUARD_MS;
+  const shouldLoad = userData && !isDirty && !isWithinSaveGuard && (
     initializedForUser !== currentUserId ||
     (hasRealData && dataLoadedForUser !== currentUserId)
   );
@@ -437,7 +447,8 @@ async function saveFinanceiroData() {
 
 function parseCurrencyInput(value: string): number {
   // Remove tudo exceto dígitos e vírgula/ponto
-  const cleaned = value.replace(/[^\d,.-]/g, '').replace('.', '').replace(',', '.');
+  // Usa replaceAll para remover TODOS os pontos de milhar (ex: 1.500,00 → 1500.00)
+  const cleaned = value.replace(/[^\d,.-]/g, '').replaceAll('.', '').replace(',', '.');
   return parseFloat(cleaned) || 0;
 }
 
@@ -607,6 +618,9 @@ export function attachFinanceiroListeners() {
     btnSalvar.textContent = 'Salvando...';
     (btnSalvar as HTMLButtonElement).disabled = true;
     await saveFinanceiroData();
+    // Marca o timestamp de salvamento para proteger contra o onSnapshot
+    // sobrescrever o estado com dados stale/cache antes de receber a confirmação
+    saveTimestamp = Date.now();
     isDirty = false; // dados salvos — próxima atualização do Firestore pode recarregar
     btnSalvar.textContent = 'Salvar alterações';
     (btnSalvar as HTMLButtonElement).disabled = false;

@@ -5,7 +5,7 @@ import { renderDashboard } from './Dashboard';
 import { ProfileTab, attachProfileListeners } from './configuracoes/ProfileTab';
 import { SecurityTab, attachSecurityListeners } from './configuracoes/SecurityTab';
 import { PlanTab, attachPlanListeners } from './configuracoes/PlanTab';
-import { FinanceiroTab, attachFinanceiroListeners, resetFinanceiroSession } from './configuracoes/FinanceiroTab';
+import { FinanceiroTab, attachFinanceiroListeners, resetFinanceiroSession, isFinanceiroSaving } from './configuracoes/FinanceiroTab';
 import type { UserSession } from '../lib/sessions';
 import { subscribeToSessions } from '../lib/sessions';
 import { db } from '../lib/firebase';
@@ -78,6 +78,10 @@ export function renderSettings(user: any, initialTab: 'profile' | 'security' | '
   const unsubFirestore = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
     if (docSnap.exists()) {
       userData = docSnap.data();
+      // Não re-renderiza a aba financeiro se acabou de salvar (evita sobrescrever dados)
+      if (activeTab === 'financeiro' && isFinanceiroSaving()) {
+        return;
+      }
       updateView();
     } else {
       userData = { uid: user.uid, email: user.email };
