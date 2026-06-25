@@ -7,6 +7,7 @@ import gsap from 'gsap';
 
 export function openCompleteProfileModal(user: any, isMandatory: boolean = false) {
   const inputClass = "w-full px-4 py-2.5 bg-[var(--color-input-bg)] border border-[var(--color-input-border)] rounded-lg text-[13px] text-[var(--color-input-text)] placeholder-[var(--color-input-placeholder)] focus:outline-none focus:border-[#D97757] transition-colors pr-10";
+  const existingPhone = user.phone || user.profile?.phone || '';
 
   const { closeModal } = Modal({
     title: 'Complete seu Perfil',
@@ -48,7 +49,7 @@ export function openCompleteProfileModal(user: any, isMandatory: boolean = false
           Para garantir a segurança da sua conta e o acesso total aos recursos, precisamos que você complete seu cadastro com telefone e endereço.
         </p>
 
-        ${Input({ id: 'phone', type: 'text', label: 'Telefone', placeholder: '(00) 00000-0000', required: true })}
+        ${Input({ id: 'phone', type: 'text', label: 'Telefone', placeholder: '(00) 00000-0000', required: true, value: existingPhone })}
 
         <div class="flex flex-col gap-1.5">
           <label for="cep" class="text-sm text-gray-400 ml-1">CEP</label>

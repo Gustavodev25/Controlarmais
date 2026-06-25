@@ -23,6 +23,7 @@ interface AuthState {
   signupData: {
     name: string;
     email: string;
+    phone: string;
     password: string;
     [key: string]: any;
   };
@@ -52,10 +53,19 @@ function getSignupDeviceInfo() {
   };
 }
 
+function formatPhone(value: string) {
+  let digits = value.replace(/\D/g, '').substring(0, 11);
+  if (digits.length > 10) digits = digits.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
+  else if (digits.length > 6) digits = digits.replace(/(\d{2})(\d{4})(\d{0,4})/, "($1) $2-$3");
+  else if (digits.length > 2) digits = digits.replace(/(\d{2})(\d{0,4})/, "($1) $2");
+  else if (digits.length > 0) digits = "(" + digits;
+  return digits;
+}
+
 class AuthManager {
   private state: AuthState = {
     isLogin: true,
-    signupData: { name: '', email: '', password: '' }
+    signupData: { name: '', email: '', phone: '', password: '' }
   };
 
   private animation: gsap.core.Timeline | null = null;
@@ -66,7 +76,13 @@ class AuthManager {
 
   private loadState() {
     const isLogin = sessionStorage.getItem('isLogin') !== 'false';
-    const signupData = JSON.parse(sessionStorage.getItem('signupData') || '{"name":"","email":"","password":""}');
+    const signupData = {
+      name: '',
+      email: '',
+      phone: '',
+      password: '',
+      ...JSON.parse(sessionStorage.getItem('signupData') || '{}')
+    };
 
     this.state = { isLogin, signupData };
   }
@@ -133,6 +149,7 @@ class AuthManager {
       <form id="auth-form" class="space-y-4">
         ${Input({ id: 'name', type: 'text', label: 'Nome Completo', required: true, value: this.state.signupData.name })}
         ${Input({ id: 'email', type: 'email', label: 'Email', required: true, value: this.state.signupData.email })}
+        ${Input({ id: 'phone', type: 'text', label: 'Telefone', placeholder: '(00) 00000-0000', required: true, value: this.state.signupData.phone, inputmode: 'numeric' })}
         ${Input({ id: 'password', type: 'password', label: 'Senha', required: true, value: this.state.signupData.password })}
 
         <div class="mt-2">
@@ -262,6 +279,12 @@ class AuthManager {
     const submitBtn = document.querySelector<HTMLButtonElement>('#auth-form button[type="submit"]');
     if (submitBtn) this.setupAuthButtonMorph(submitBtn);
 
+    const phoneInput = document.getElementById('phone') as HTMLInputElement | null;
+    phoneInput?.addEventListener('input', (e) => {
+      const input = e.target as HTMLInputElement;
+      input.value = formatPhone(input.value);
+    });
+
     // Password toggles
     const passwordToggles = document.querySelectorAll('.password-toggle');
     passwordToggles.forEach(btn => {
@@ -323,14 +346,20 @@ class AuthManager {
         // Signup
         const nameInput = document.getElementById('name') as HTMLInputElement;
         const emailInput = document.getElementById('email') as HTMLInputElement;
+        const phoneInput = document.getElementById('phone') as HTMLInputElement;
         const passwordInput = document.getElementById('password') as HTMLInputElement;
         const termsInput = document.getElementById('terms') as HTMLInputElement;
 
         if (!termsInput?.checked) throw new Error("Concorde com os termos.");
 
+        const phone = formatPhone(phoneInput.value);
+        const phoneDigits = phone.replace(/\D/g, '');
+        if (phoneDigits.length < 10) throw new Error("Informe um telefone valido.");
+
         const signupData = {
           name: nameInput.value,
           email: emailInput.value,
+          phone,
           password: passwordInput.value
         };
 
@@ -348,7 +377,7 @@ class AuthManager {
           uid: userCredential.user.uid,
           name: signupData.name,
           email: signupData.email,
-          phone: null,
+          phone: signupData.phone,
           createdAt: now,
           updatedAt: now,
           createdFromMobile: signupDevice.createdFromMobile,
@@ -368,7 +397,7 @@ class AuthManager {
             id: userCredential.user.uid,
             name: signupData.name,
             email: signupData.email,
-            phone: null,
+            phone: signupData.phone,
             address: {
               cep: null,
               street: null,

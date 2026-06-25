@@ -1334,6 +1334,8 @@ function renderTableContent(users: any[]): string {
 
 let allUsersGlobal: any[] = [];
 let filteredUsersGlobal: any[] = [];
+let currentSortField: string | null = null;
+let currentSortDirection: 'asc' | 'desc' = 'asc';
 
 const originFilters: FilterOption[] = [
   { id: 'all_origins', label: 'Todos' },
@@ -1588,6 +1590,24 @@ function exportGrowthTableToExcel(): void {
   });
 }
 
+function updateSortIndicators() {
+  const sortAscIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-left:4px;color:var(--color-text);"><path d="m18 15-6-6-6 6"/></svg>`;
+  const sortDescIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-left:4px;color:var(--color-text);"><path d="m6 9 6 6 6-6"/></svg>`;
+
+  document.querySelectorAll('.sortable-th').forEach(th => {
+    const indicator = th.querySelector('.sort-indicator');
+    if (indicator) {
+      if (th.getAttribute('data-sort') === currentSortField) {
+        indicator.innerHTML = currentSortDirection === 'asc' ? sortAscIcon : sortDescIcon;
+        (th as HTMLElement).style.color = 'var(--color-text)';
+      } else {
+        indicator.innerHTML = '';
+        (th as HTMLElement).style.color = '';
+      }
+    }
+  });
+}
+
 function applyFilterAndRender() {
   localStorage.setItem('admin_growth_filter_origin', activeOriginFilter);
   localStorage.setItem('admin_growth_filter_trial_status', activeTrialStatusFilter);
@@ -1677,6 +1697,37 @@ function applyFilterAndRender() {
       matchSearch &&
       matchDateRange;
   });
+
+  if (currentSortField) {
+    filteredUsersGlobal.sort((a: any, b: any) => {
+      let valA: any = 0;
+      let valB: any = 0;
+      if (currentSortField === 'nome') {
+        valA = (a.displayName || a.name || a.email || '').toLowerCase();
+        valB = (b.displayName || b.name || b.email || '').toLowerCase();
+      } else if (currentSortField === 'funil') {
+        valA = getTrialStatusKey(a) || '';
+        valB = getTrialStatusKey(b) || '';
+      } else if (currentSortField === 'criado_em') {
+        const dateA = parseDateValue(getCreatedDateValue(a));
+        const dateB = parseDateValue(getCreatedDateValue(b));
+        valA = dateA ? dateA.getTime() : 0;
+        valB = dateB ? dateB.getTime() : 0;
+      } else if (currentSortField === 'bancos') {
+        valA = hasConnectedBank(a) ? 1 : 0;
+        valB = hasConnectedBank(b) ? 1 : 0;
+      } else if (currentSortField === 'ultimo_acesso') {
+        const accA = getLastAccessDays(a);
+        const accB = getLastAccessDays(b);
+        valA = accA !== null ? accA : Infinity;
+        valB = accB !== null ? accB : Infinity;
+      }
+
+      if (valA < valB) return currentSortDirection === 'asc' ? -1 : 1;
+      if (valA > valB) return currentSortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }
 
   tbody.innerHTML = renderTableContent(filteredUsersGlobal);
   if (countSpan) {
@@ -2213,15 +2264,14 @@ async function loadSubscriptions(): Promise<void> {
           <div class="cc-table-header-left">
             <span class="cc-table-header-title">Funil trial → banco</span>
           </div>
-          <div class="cc-table-header-right">
+          <div class="cc-table-header-right" style="gap: 6px;">
             <div id="verify-loading-indicator" style="display:none;align-items:center;gap:5px;">
               <div class="cc-spinner-xs"></div>
               <span style="font-size:11px;color:var(--color-text-secondary);">Buscando dados verificados…</span>
             </div>
-            <span class="cc-table-count" style="font-size:12px;font-weight:600;color:var(--color-text-secondary);">
-              ${allUsersGlobal.length} usuário${allUsersGlobal.length !== 1 ? 's' : ''}
-            </span>
-            <div class="cc-header-sep"></div>
+            <div class="cc-action-btn" style="width:auto;padding:0 10px;font-size:12px;font-weight:500;cursor:default;">
+              <span class="cc-table-count">${allUsersGlobal.length} usuário${allUsersGlobal.length !== 1 ? 's' : ''}</span>
+            </div>
             <button id="btn-downgrade-non-paying" class="cc-action-btn" title="Remover PRO de não pagantes (preserva admins)">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -2239,11 +2289,11 @@ async function loadSubscriptions(): Promise<void> {
           <table class="cc-table">
             <thead>
               <tr>
-                <th>Nome</th>
-                <th>Funil</th>
-                <th>Criado em</th>
-                <th>Bancos conectados</th>
-                <th>Último acesso</th>
+                <th class="sortable-th" data-sort="nome" style="cursor:pointer;user-select:none;">Nome <span class="sort-indicator"></span></th>
+                <th class="sortable-th" data-sort="funil" style="cursor:pointer;user-select:none;">Funil <span class="sort-indicator"></span></th>
+                <th class="sortable-th" data-sort="criado_em" style="cursor:pointer;user-select:none;">Criado em <span class="sort-indicator"></span></th>
+                <th class="sortable-th" data-sort="bancos" style="cursor:pointer;user-select:none;">Bancos conectados <span class="sort-indicator"></span></th>
+                <th class="sortable-th" data-sort="ultimo_acesso" style="cursor:pointer;user-select:none;">Último acesso <span class="sort-indicator"></span></th>
                 <th style="text-align:right;">Ações</th>
               </tr>
             </thead>
@@ -2258,8 +2308,23 @@ async function loadSubscriptions(): Promise<void> {
     document.getElementById('btn-refresh-subs')?.addEventListener('click', loadSubscriptions);
     document.getElementById('btn-downgrade-non-paying')?.addEventListener('click', handleDowngradeNonPaying);
 
+    document.querySelectorAll('.sortable-th').forEach(th => {
+      th.addEventListener('click', () => {
+        const field = th.getAttribute('data-sort');
+        if (currentSortField === field) {
+          currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+          currentSortField = field;
+          currentSortDirection = 'asc';
+        }
+        applyFilterAndRender();
+        updateSortIndicators();
+      });
+    });
+
     // Apply current filters after load
     applyFilterAndRender();
+    updateSortIndicators();
 
     // Verificacao em lote via /api/admin/stats (fonte unica de verdade)
     const verifyIndicator = document.getElementById('verify-loading-indicator');
@@ -2609,9 +2674,8 @@ export function renderAdminSubscriptions(user: any) {
           gap: 8px;
         }
         .cc-table-header-title {
-          font-size: 10px;
-          font-weight: 700;
-          letter-spacing: 0.14em;
+          font-size: 13px;
+          font-weight: 400;
           color: var(--color-text-secondary);
         }
         .cc-table-header-right {
@@ -3016,7 +3080,7 @@ export function renderAdminSubscriptions(user: any) {
         }
         .cc-action-btn:hover {
           color: var(--color-text);
-          background: transparent;
+          background: var(--color-surface-hover);
         }
         .user-btn-delete:hover {
           color: #ef4444 !important;

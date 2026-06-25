@@ -285,7 +285,7 @@ onAuthStateChanged(auth, async (user) => {
 
             if (!isProfileComplete && !isProfilePromoShown) {
               const openProfileForm = () => {
-                import('./components/CompleteProfileModal').then(m => m.openCompleteProfileModal(user, true));
+                import('./components/CompleteProfileModal').then(m => m.openCompleteProfileModal(currentUser, true));
               };
 
               if (!welcomeModalShown) {
