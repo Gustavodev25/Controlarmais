@@ -510,6 +510,46 @@ function renderSubscriptionModalTimelineRows(userItem: any): string {
   return rows.join('');
 }
 
+function renderStoreAwarenessModalRows(userItem: any): string {
+  const info = getStoreAwarenessInfo(userItem);
+  if (!info) return '';
+
+  const provider = providerName(normalizeProviderKey(userItem.provider || userItem.storeProvider));
+  const accessDate = getStoreAccessDate(userItem);
+  const autoRenew = userItem.storeAutoRenewEnabled;
+  const autoRenewLabel = autoRenew === true
+    ? 'Ativa'
+    : (autoRenew === false ? 'Desligada' : 'Nao informado');
+  const rawStatus = userItem.storeRawStatus || userItem.appleStatus || userItem.googlePlayStatus || userItem.storeStatus || '';
+
+  return `
+      <div class="flex justify-between items-center gap-4 px-4 sm:px-8 py-3 border-b border-[var(--color-border)]/50">
+        <span class="text-[var(--color-text-secondary)]">Status loja</span>
+        <span class="font-medium text-right">${escapeHtml(provider)} - ${escapeHtml(info.label)}</span>
+      </div>
+      <div class="flex justify-between items-start gap-4 px-4 sm:px-8 py-3 border-b border-[var(--color-border)]/50">
+        <span class="text-[var(--color-text-secondary)]">Detalhe loja</span>
+        <span class="font-medium text-right max-w-[260px]">${escapeHtml(info.detail)}</span>
+      </div>
+      <div class="flex justify-between items-center gap-4 px-4 sm:px-8 py-3 border-b border-[var(--color-border)]/50">
+        <span class="text-[var(--color-text-secondary)]">Renovacao auto.</span>
+        <span class="font-medium">${autoRenewLabel}</span>
+      </div>
+      ${accessDate ? `
+      <div class="flex justify-between items-center gap-4 px-4 sm:px-8 py-3 border-b border-[var(--color-border)]/50">
+        <span class="text-[var(--color-text-secondary)]">Acesso loja ate</span>
+        <span class="font-medium">${fmtDate(accessDate)}</span>
+      </div>
+      ` : ''}
+      ${rawStatus ? `
+      <div class="flex justify-between items-center gap-4 px-4 sm:px-8 py-3 border-b border-[var(--color-border)]/50">
+        <span class="text-[var(--color-text-secondary)]">Status bruto loja</span>
+        <span class="font-mono text-xs opacity-75">${escapeHtml(String(rawStatus))}</span>
+      </div>
+      ` : ''}
+  `;
+}
+
 function fmtRelativeTime(dateStr: string | null): { text: string; color: string } {
   if (!dateStr) return { text: 'Nunca entrou', color: 'var(--color-text-secondary)' };
   const d = new Date(dateStr);
@@ -756,6 +796,118 @@ function renderSubscriptionStatusMiniBadge(userItem: any): string {
   return `<span class="cc-status-pill cc-status-pill-mini ${cls}"><span class="cc-status-context">Ass.</span>${subscriptionStatusLabel(status).toLowerCase()}</span>`;
 }
 
+type StoreAwarenessInfo = {
+  label: string;
+  detail: string;
+  cls: string;
+  category: 'active' | 'trial' | 'canceled' | 'billing' | 'expired' | 'muted';
+};
+
+function getStoreAccessDate(userItem: any): string | null {
+  return userItem.storeAccessEndsAt ||
+    userItem.storeAccessEndsDate ||
+    userItem.currentPeriodEnd ||
+    userItem.nextBillingDate ||
+    null;
+}
+
+function getStoreStatusReason(userItem: any): string {
+  const provider = normalizeProviderKey(userItem.provider || userItem.storeProvider);
+  const rawReason = normalizeValue(userItem.storeStatusReason);
+  if (rawReason) return rawReason;
+
+  const storeStatus = normalizeValue(userItem.storeStatus || userItem.providerStatus);
+  if (storeStatus === 'active' && userItem.storeAutoRenewEnabled === false) return 'auto_renew_disabled';
+  if (storeStatus) return storeStatus;
+
+  if (provider === 'apple') {
+    const appleStatus = normalizeValue(userItem.appleStatus);
+    if (appleStatus === '1') return 'active';
+    if (appleStatus === '2') return 'expired';
+    if (appleStatus === '3') return 'billing_retry';
+    if (appleStatus === '4') return 'billing_grace_period';
+    if (appleStatus === '5') return 'revoked';
+    return appleStatus;
+  }
+
+  if (provider === 'android') {
+    return normalizeValue(userItem.googlePlayStatus)
+      .replace(/^subscription_state_/, '')
+      .replace(/_/g, '-');
+  }
+
+  return '';
+}
+
+function getStoreAwarenessInfo(userItem: any): StoreAwarenessInfo | null {
+  const provider = normalizeProviderKey(userItem.provider || userItem.storeProvider);
+  if (!['apple', 'android'].includes(provider)) return null;
+
+  let reason = getStoreStatusReason(userItem);
+  const accessDate = getStoreAccessDate(userItem);
+  const accessDetail = accessDate ? `Acesso ate ${fmtDate(accessDate)}` : '';
+  const storeDetail = String(userItem.storeStatusDetail || '').trim();
+
+  if (!reason && getTrialStatusKey(userItem) === 'expired') reason = 'expired';
+  if (!reason && userItem.storeAutoRenewEnabled === false) reason = 'auto_renew_disabled';
+  if (!reason) {
+    return {
+      label: 'Loja pendente',
+      detail: 'Dados da loja ainda nao verificados.',
+      cls: 'cc-store-muted',
+      category: 'muted',
+    };
+  }
+
+  const map: Record<string, StoreAwarenessInfo> = {
+    trial_active: { label: 'Trial ativo', detail: 'Trial confirmado pela loja.', cls: 'cc-store-info', category: 'trial' },
+    trialing: { label: 'Trial ativo', detail: 'Trial confirmado pela loja.', cls: 'cc-store-info', category: 'trial' },
+    paid_active: { label: 'Pagante app', detail: 'Assinatura paga ativa na loja.', cls: 'cc-store-good', category: 'active' },
+    active: { label: 'Pagante app', detail: 'Assinatura ativa na loja.', cls: 'cc-store-good', category: 'active' },
+    auto_renew_disabled: { label: 'Cancelou renov.', detail: 'Renovacao automatica desligada.', cls: 'cc-store-warn', category: 'canceled' },
+    canceled_by_user: { label: 'Cancelou renov.', detail: 'Cancelamento feito pelo usuario na loja.', cls: 'cc-store-warn', category: 'canceled' },
+    canceled: { label: 'Cancelou renov.', detail: 'Assinatura cancelada na loja.', cls: 'cc-store-warn', category: 'canceled' },
+    canceled_by_system: { label: 'Falha cobranca', detail: 'Cancelamento automatico da loja, geralmente por cobranca.', cls: 'cc-store-danger', category: 'billing' },
+    billing_retry: { label: 'Retry cobranca', detail: 'Loja tentando recuperar cobranca.', cls: 'cc-store-danger', category: 'billing' },
+    billing_grace_period: { label: 'Grace period', detail: 'Acesso em periodo de tolerancia por cobranca.', cls: 'cc-store-warn', category: 'billing' },
+    'in-grace-period': { label: 'Grace period', detail: 'Acesso em periodo de tolerancia por cobranca.', cls: 'cc-store-warn', category: 'billing' },
+    billing_failed: { label: 'Falha cobranca', detail: 'A loja nao conseguiu renovar a cobranca.', cls: 'cc-store-danger', category: 'billing' },
+    billing_on_hold: { label: 'Hold cobranca', detail: 'Google Play colocou a assinatura em hold.', cls: 'cc-store-danger', category: 'billing' },
+    'on-hold': { label: 'Hold cobranca', detail: 'Google Play colocou a assinatura em hold.', cls: 'cc-store-danger', category: 'billing' },
+    expired_billing: { label: 'Expirou cobranca', detail: 'Expirou apos falha de cobranca.', cls: 'cc-store-danger', category: 'expired' },
+    expired_after_cancel: { label: 'Expirou cancel.', detail: 'Expirou apos cancelamento do usuario.', cls: 'cc-store-warn', category: 'expired' },
+    expired: { label: 'Expirado loja', detail: 'Assinatura expirada na loja.', cls: 'cc-store-warn', category: 'expired' },
+    revoked: { label: 'Revogado', detail: 'Assinatura revogada ou reembolsada.', cls: 'cc-store-danger', category: 'expired' },
+    paused: { label: 'Pausado', detail: 'Assinatura pausada na loja.', cls: 'cc-store-muted', category: 'muted' },
+    pending: { label: 'Pendente', detail: 'Compra ou assinatura pendente na loja.', cls: 'cc-store-muted', category: 'muted' },
+  };
+
+  const info = map[reason] || {
+    label: reason.replace(/[-_]/g, ' '),
+    detail: `Status da loja: ${reason}.`,
+    cls: 'cc-store-muted',
+    category: 'muted' as const,
+  };
+  const detailParts = [storeDetail || info.detail, accessDetail].filter(Boolean);
+
+  return {
+    ...info,
+    detail: Array.from(new Set(detailParts)).join(' '),
+  };
+}
+
+function renderStoreAwarenessBadge(userItem: any): string {
+  const info = getStoreAwarenessInfo(userItem);
+  if (!info) return '';
+
+  return `
+    <span class="cc-store-chip ${info.cls}" title="${escapeHtml(info.detail)}">
+      <span class="cc-store-dot"></span>
+      <span>${escapeHtml(info.label)}</span>
+    </span>
+  `;
+}
+
 function getTrialDaysCompactInfo(userItem: any): { label: string; detail: string; cls: string } {
   const status = getTrialStatusKey(userItem);
   const daysRemaining = getTrialDaysRemaining(userItem);
@@ -954,6 +1106,7 @@ function renderFunnelCell(userItem: any): string {
         ${dotOrIcon}
         <span>${escapeHtml(originLabel)}</span>
       </span>
+      ${renderStoreAwarenessBadge(userItem)}
       <button type="button" class="cc-action-btn user-btn-funnel hover:bg-[var(--color-surface-hover)]" data-user='${safeJsonAttr(userItem)}' title="Abrir Funil" style="padding: 6px 10px; border: 1px solid var(--color-border); border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--color-text-secondary); transition: all 0.15s; white-space: nowrap; width: max-content;">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;">
           <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
@@ -1400,6 +1553,62 @@ let activeDateEndFilter = localStorage.getItem('admin_growth_filter_date_end') |
 let activeUserSearch = localStorage.getItem('admin_growth_user_search') || '';
 let filterSelectorControls: Record<string, { setFilterId: (filterId: string) => void }> = {};
 
+const STORE_STATUS_FIELDS = [
+  'entitlementActive',
+  'storeProvider',
+  'storeStatus',
+  'storeRawStatus',
+  'storeStatusReason',
+  'storeStatusDetail',
+  'storeAutoRenewEnabled',
+  'storeAutoRenewStatus',
+  'storeExpirationIntent',
+  'storeCancelReason',
+  'storeCancelSurveyReason',
+  'storeGracePeriodExpiresAt',
+  'storeBillingIssue',
+  'storeAccessEndsAt',
+  'storeAccessEndsDate',
+  'productId',
+  'currentPeriodEnd',
+  'nextBillingDate',
+  'appleStatus',
+  'googlePlayStatus',
+  'trialStatus',
+  'trialDays',
+  'trialStartedAt',
+  'trialStartedDate',
+  'trialEndsAt',
+  'trialEndsDate',
+];
+
+function mergeStoreInfoIntoUser(userItem: any, info: any): void {
+  if (!info) return;
+  if (info.provider && normalizeProviderKey(userItem.provider) !== normalizeProviderKey(info.provider)) {
+    userItem.provider = info.provider;
+  }
+
+  STORE_STATUS_FIELDS.forEach((field) => {
+    if (info[field] !== undefined && info[field] !== null) {
+      userItem[field] = info[field];
+    }
+  });
+
+  if (info.status) userItem.providerStatus = info.status;
+  if (info.monthlyAmount !== undefined && info.monthlyAmount !== null) {
+    userItem.verifiedMonthlyAmount = info.monthlyAmount;
+  }
+  if (info.entitlementActive !== undefined) {
+    userItem.isVerified = Boolean(info.entitlementActive);
+  } else if (info.verified !== undefined) {
+    userItem.isVerified = Boolean(info.verified);
+  }
+  if (info.paying !== undefined) {
+    userItem.isPaying = Boolean(info.paying);
+  }
+  userItem.verificationUnavailable = false;
+}
+
 function resetGrowthFilters(): void {
   const defaults = {
     origin: 'all_origins',
@@ -1451,6 +1660,7 @@ function normalizeSearchText(value: any): string {
 function userMatchesSearch(userItem: any, searchTerm: string): boolean {
   const term = normalizeSearchText(searchTerm);
   if (!term) return true;
+  const storeInfo = getStoreAwarenessInfo(userItem);
 
   const searchable = [
     userItem.name,
@@ -1463,6 +1673,10 @@ function userMatchesSearch(userItem: any, searchTerm: string): boolean {
     getSignupPlatformLabel(userItem),
     trialStatusLabel(getTrialStatusKey(userItem)),
     subscriptionStatusLabel(getSubscriptionStatusKey(userItem)),
+    storeInfo?.label,
+    storeInfo?.detail,
+    userItem.storeStatusReason,
+    userItem.storeRawStatus,
     getBankExportText(userItem),
   ].map(normalizeSearchText).join(' ');
 
@@ -1523,6 +1737,18 @@ function getGatewayVerificationExportText(userItem: any): string {
   return 'Não verificado';
 }
 
+function getStoreStatusExportText(userItem: any): string {
+  const info = getStoreAwarenessInfo(userItem);
+  return info ? info.label : '';
+}
+
+function getStoreStatusDetailExportText(userItem: any): string {
+  const info = getStoreAwarenessInfo(userItem);
+  if (!info) return '';
+  const raw = userItem.storeRawStatus || userItem.appleStatus || userItem.googlePlayStatus || '';
+  return raw ? `${info.detail} (raw: ${raw})` : info.detail;
+}
+
 function buildGrowthExportRows(users: any[]): string[][] {
   return users.map((userItem) => [
     exportText(userItem.name || userItem.email || userItem.uid),
@@ -1531,6 +1757,8 @@ function buildGrowthExportRows(users: any[]): string[][] {
     exportText(getSignupPlatformLabel(userItem)),
     trialStatusLabel(getTrialStatusKey(userItem)),
     subscriptionStatusLabel(getSubscriptionStatusKey(userItem)),
+    getStoreStatusExportText(userItem),
+    getStoreStatusDetailExportText(userItem),
     getTrialDaysExportText(userItem),
     getLastAccessExportText(userItem),
     getBankExportText(userItem),
@@ -1556,6 +1784,8 @@ function exportGrowthTableToExcel(): void {
     'Origem',
     'Status trial',
     'Status cliente',
+    'Status loja',
+    'Detalhe loja',
     'Dias restantes trial',
     'Segmentação de acesso',
     'Segmentação de conexões',
@@ -2363,11 +2593,32 @@ async function loadSubscriptions(): Promise<void> {
         trialStartedDate?: string | null;
         trialEndsAt?: string | null;
         trialEndsDate?: string | null;
+        entitlementActive?: boolean | null;
+        verified?: boolean | null;
+        paying?: boolean | null;
+        storeProvider?: string | null;
+        storeStatus?: string | null;
+        storeRawStatus?: string | null;
+        storeStatusReason?: string | null;
+        storeStatusDetail?: string | null;
+        storeAutoRenewEnabled?: boolean | null;
+        storeAutoRenewStatus?: string | number | null;
+        storeExpirationIntent?: string | number | null;
+        storeCancelReason?: string | null;
+        storeCancelSurveyReason?: string | null;
+        storeGracePeriodExpiresAt?: string | null;
+        storeBillingIssue?: boolean | null;
+        storeAccessEndsAt?: string | null;
+        storeAccessEndsDate?: string | null;
       };
+      type StoreUserInfo = PayingUserInfo & Record<string, any>;
       const payingUsers: Array<PayingUserInfo> = statsData.payingUsers || [];
+      const storeUsers: Array<StoreUserInfo> = statsData.storeUsers || [];
 
       const payingByUid = new Map<string, PayingUserInfo>();
       payingUsers.forEach((p) => payingByUid.set(p.uid, p));
+      const storeByUid = new Map<string, StoreUserInfo>();
+      storeUsers.forEach((p) => storeByUid.set(p.uid, p));
 
       if (providerErrors.length) {
         toaster.create({
@@ -2379,7 +2630,11 @@ async function loadSubscriptions(): Promise<void> {
       }
 
       allUsersGlobal.forEach((u: any) => {
+        const storeInfo = storeByUid.get(u.uid);
         const info = payingByUid.get(u.uid);
+        if (storeInfo) {
+          mergeStoreInfoIntoUser(u, storeInfo);
+        }
         if (info) {
           u.verificationUnavailable = false;
           u.isVerified = true;
@@ -2412,6 +2667,9 @@ async function loadSubscriptions(): Promise<void> {
           u.isVerified = undefined;
           u.isPaying = false;
           u.providerStatus = 'error';
+        } else if (storeInfo) {
+          u.verificationUnavailable = false;
+          u.isPaying = Boolean(storeInfo.paying);
         } else {
           u.verificationUnavailable = false;
           u.isVerified = false;
@@ -2505,6 +2763,7 @@ function showUserModal(userItem: any) {
           ${renderProviderLabel(userItem)}
         </div>
       </div>
+      ${renderStoreAwarenessModalRows(userItem)}
       ${renderCancellationModalRows(userItem)}
       ${renderSubscriptionModalTimelineRows(userItem)}
       <div class="flex justify-between items-center px-4 sm:px-8 py-3">
@@ -2891,6 +3150,39 @@ export function renderAdminSubscriptions(user: any) {
           opacity: 0.85;
           flex-shrink: 0;
         }
+        .cc-store-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          height: 22px;
+          max-width: 154px;
+          padding: 0 8px;
+          border-radius: 999px;
+          border: 1px solid var(--color-border);
+          font-size: 10.5px;
+          font-weight: 700;
+          line-height: 1;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .cc-store-chip > span:last-child {
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .cc-store-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 999px;
+          background: currentColor;
+          flex: 0 0 auto;
+        }
+        .cc-store-good { color: #22c55e; background: rgba(34, 197, 94, 0.08); border-color: rgba(34, 197, 94, 0.2); }
+        .cc-store-info { color: #38bdf8; background: rgba(56, 189, 248, 0.08); border-color: rgba(56, 189, 248, 0.2); }
+        .cc-store-warn { color: #f59e0b; background: rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.2); }
+        .cc-store-danger { color: #ef4444; background: rgba(239, 68, 68, 0.08); border-color: rgba(239, 68, 68, 0.2); }
+        .cc-store-muted { color: var(--color-text-secondary); background: var(--color-surface-hover); }
 
         /* Status badge */
         .cc-badge {

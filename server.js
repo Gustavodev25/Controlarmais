@@ -347,6 +347,88 @@ function getAppleStatusInfo(status) {
     return map[normalized] || { status: String(status || 'unknown').toLowerCase(), verified: false, paying: false };
 }
 
+function normalizeBooleanStatus(value) {
+    if (value === true || value === false) return value;
+    if (value === 1 || value === '1') return true;
+    if (value === 0 || value === '0') return false;
+    if (String(value || '').toLowerCase() === 'true') return true;
+    if (String(value || '').toLowerCase() === 'false') return false;
+    return null;
+}
+
+function formatAppleMillisIso(value) {
+    const n = Number(value || 0);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    const date = new Date(n);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function getAppleExpirationReason(expirationIntent) {
+    const code = Number(expirationIntent || 0);
+    const map = {
+        1: { key: 'canceled_by_user', detail: 'Usuario desligou a renovacao na Apple.' },
+        2: { key: 'billing_failed', detail: 'Apple nao conseguiu renovar a cobranca.' },
+        3: { key: 'price_consent_missing', detail: 'Usuario nao aceitou alteracao de preco.' },
+        4: { key: 'product_unavailable', detail: 'Produto ficou indisponivel para renovacao.' },
+        5: { key: 'unknown_expiration', detail: 'Apple informou expiracao sem causa detalhada.' },
+    };
+    return map[code] || { key: 'expired', detail: 'Assinatura expirada na Apple.' };
+}
+
+function buildAppleStoreInsight({ latest, isTrialing, expiresAt }) {
+    const renewal = latest?.renewal || {};
+    const status = isTrialing ? 'trialing' : latest?.statusInfo?.status || 'unknown';
+    const autoRenewEnabled = normalizeBooleanStatus(renewal.autoRenewStatus);
+    const expiration = getAppleExpirationReason(renewal.expirationIntent);
+    const gracePeriodExpiresAt = formatAppleMillisIso(renewal.gracePeriodExpiresDate);
+    const billingRetry = normalizeBooleanStatus(renewal.isInBillingRetryPeriod) === true;
+    let reason = status;
+    let detail = `Status Apple: ${status}.`;
+
+    if (isTrialing) {
+        reason = 'trial_active';
+        detail = expiresAt ? `Trial ativo ate ${expiresAt.split('T')[0]}.` : 'Trial ativo na Apple.';
+    } else if (status === 'billing_retry') {
+        reason = 'billing_retry';
+        detail = 'Apple esta tentando recuperar uma cobranca com falha.';
+    } else if (status === 'billing_grace_period') {
+        reason = 'billing_grace_period';
+        detail = gracePeriodExpiresAt
+            ? `Apple liberou grace period ate ${gracePeriodExpiresAt.split('T')[0]}.`
+            : 'Apple liberou grace period por falha de cobranca.';
+    } else if (status === 'revoked') {
+        reason = 'revoked';
+        detail = 'Assinatura revogada ou reembolsada pela Apple.';
+    } else if (status === 'expired') {
+        reason = expiration.key;
+        detail = expiration.detail;
+    } else if (autoRenewEnabled === false) {
+        reason = 'auto_renew_disabled';
+        detail = expiresAt
+            ? `Usuario desligou renovacao; acesso ate ${expiresAt.split('T')[0]}.`
+            : 'Usuario desligou a renovacao automatica.';
+    } else if (status === 'active') {
+        reason = 'paid_active';
+        detail = 'Assinatura paga ativa na Apple.';
+    }
+
+    return {
+        storeProvider: 'apple',
+        storeStatus: status,
+        storeRawStatus: latest?.rawStatus ?? null,
+        storeStatusReason: reason,
+        storeStatusDetail: detail,
+        storeAutoRenewEnabled: autoRenewEnabled,
+        storeAutoRenewStatus: renewal.autoRenewStatus ?? null,
+        storeExpirationIntent: renewal.expirationIntent ?? null,
+        storeGracePeriodExpiresAt: gracePeriodExpiresAt,
+        storeBillingIssue: ['billing_retry', 'billing_grace_period', 'billing_failed'].includes(reason) || billingRetry,
+        storeAccessEndsAt: expiresAt || null,
+        storeAccessEndsDate: expiresAt ? expiresAt.split('T')[0] : null,
+        entitlementActive: ['active', 'trialing', 'billing_grace_period'].includes(status),
+    };
+}
+
 function getLatestAppleTransaction(responseData = {}) {
     const candidates = [];
     for (const group of responseData.data || []) {
@@ -416,6 +498,7 @@ async function verifyAppleStoreSubscription(originalTransactionId, fallback = {}
     const trialDays = (isTrialing && purchaseDateMs && latest.expiresAtMs)
         ? Math.max(1, Math.round((latest.expiresAtMs - purchaseDateMs) / 86400000))
         : null;
+    const storeInsight = buildAppleStoreInsight({ latest, isTrialing, expiresAt });
 
     return {
         configured: true,
@@ -434,6 +517,7 @@ async function verifyAppleStoreSubscription(originalTransactionId, fallback = {}
         trialStartedDate: trialStartedAt ? trialStartedAt.split('T')[0] : null,
         trialEndsAt,
         trialEndsDate: trialEndsAt ? trialEndsAt.split('T')[0] : null,
+        ...storeInsight,
     };
 }
 
@@ -517,6 +601,108 @@ function getGoogleSubscriptionStatusInfo(state) {
     return map[normalized] || { status: normalized.toLowerCase() || 'unknown', verified: false, paying: false };
 }
 
+function getGoogleCancellationReason(canceledStateContext = {}) {
+    if (canceledStateContext.userInitiatedCancellation) {
+        const survey = canceledStateContext.userInitiatedCancellation.cancelSurveyResult || {};
+        return {
+            key: 'canceled_by_user',
+            detail: survey.reason
+                ? `Usuario cancelou no Google Play (${survey.reason}).`
+                : 'Usuario cancelou no Google Play.',
+            cancelSurveyReason: survey.reason || null,
+        };
+    }
+    if (canceledStateContext.systemInitiatedCancellation) {
+        return {
+            key: 'canceled_by_system',
+            detail: 'Google Play cancelou automaticamente, geralmente por falha de cobranca.',
+            cancelSurveyReason: null,
+        };
+    }
+    if (canceledStateContext.developerInitiatedCancellation) {
+        return {
+            key: 'canceled_by_developer',
+            detail: 'Cancelamento feito pelo desenvolvedor.',
+            cancelSurveyReason: null,
+        };
+    }
+    if (canceledStateContext.replacementCancellation) {
+        return {
+            key: 'subscription_replaced',
+            detail: 'Assinatura cancelada por troca de plano/produto.',
+            cancelSurveyReason: null,
+        };
+    }
+    return {
+        key: 'canceled',
+        detail: 'Assinatura cancelada no Google Play.',
+        cancelSurveyReason: null,
+    };
+}
+
+function buildGoogleStoreInsight({ purchase, statusInfo, latestLine, expiryTime }) {
+    const status = statusInfo.status || 'unknown';
+    const autoRenewEnabled = normalizeBooleanStatus(latestLine?.autoRenewingPlan?.autoRenewEnabled);
+    const expiryDate = expiryTime ? new Date(expiryTime) : null;
+    const hasFutureAccess = expiryDate && !Number.isNaN(expiryDate.getTime()) && expiryDate.getTime() > Date.now();
+    const cancellation = getGoogleCancellationReason(purchase?.canceledStateContext || {});
+    let reason = status;
+    let detail = `Status Google Play: ${status}.`;
+
+    if (status === 'active' && autoRenewEnabled === false) {
+        reason = 'auto_renew_disabled';
+        detail = expiryTime
+            ? `Usuario desligou renovacao; acesso ate ${expiryTime.split('T')[0]}.`
+            : 'Usuario desligou a renovacao automatica.';
+    } else if (status === 'active') {
+        reason = 'paid_active';
+        detail = 'Assinatura paga ativa no Google Play.';
+    } else if (status === 'billing_grace_period') {
+        reason = 'billing_grace_period';
+        detail = expiryTime
+            ? `Google Play liberou grace period ate ${expiryTime.split('T')[0]}.`
+            : 'Google Play liberou grace period por falha de cobranca.';
+    } else if (status === 'on_hold') {
+        reason = 'billing_on_hold';
+        detail = 'Google Play colocou a assinatura em hold por falha de cobranca.';
+    } else if (status === 'canceled') {
+        reason = cancellation.key;
+        detail = hasFutureAccess && expiryTime
+            ? `${cancellation.detail} Acesso ate ${expiryTime.split('T')[0]}.`
+            : cancellation.detail;
+    } else if (status === 'expired') {
+        reason = cancellation.key === 'canceled_by_user'
+            ? 'expired_after_cancel'
+            : (cancellation.key === 'canceled_by_system' ? 'expired_billing' : 'expired');
+        detail = reason === 'expired_after_cancel'
+            ? 'Assinatura expirou apos cancelamento no Google Play.'
+            : (reason === 'expired_billing'
+                ? 'Assinatura expirou apos falha de cobranca no Google Play.'
+                : 'Assinatura expirada no Google Play.');
+    } else if (status === 'paused') {
+        reason = 'paused';
+        detail = 'Assinatura pausada no Google Play.';
+    } else if (status === 'pending') {
+        reason = 'pending';
+        detail = 'Compra pendente no Google Play.';
+    }
+
+    return {
+        storeProvider: 'android',
+        storeStatus: status,
+        storeRawStatus: purchase?.subscriptionState || null,
+        storeStatusReason: reason,
+        storeStatusDetail: detail,
+        storeAutoRenewEnabled: autoRenewEnabled,
+        storeCancelReason: cancellation.key,
+        storeCancelSurveyReason: cancellation.cancelSurveyReason,
+        storeBillingIssue: ['billing_grace_period', 'billing_on_hold', 'expired_billing', 'canceled_by_system'].includes(reason),
+        storeAccessEndsAt: expiryTime || null,
+        storeAccessEndsDate: expiryTime ? expiryTime.split('T')[0] : null,
+        entitlementActive: ['active', 'billing_grace_period'].includes(status) || (status === 'canceled' && Boolean(hasFutureAccess)),
+    };
+}
+
 function moneyToNumber(money = {}) {
     const units = Number(money.units || 0);
     const nanos = Number(money.nanos || 0);
@@ -550,6 +736,12 @@ async function verifyGooglePlaySubscription(purchaseToken, packageName, fallback
     const rawAmount = recurringPrice ? moneyToNumber(recurringPrice) : 0;
     const amount = rawAmount > 0 ? getStoreMonthlyAmountFromValue(rawAmount, fallback.billingCycle) : getStoreMonthlyAmountFromValue(fallback.amount, fallback.billingCycle);
     const expiryTime = latestLine.expiryTime || null;
+    const storeInsight = buildGoogleStoreInsight({
+        purchase: response.data,
+        statusInfo,
+        latestLine,
+        expiryTime,
+    });
 
     return {
         configured: true,
@@ -564,6 +756,7 @@ async function verifyGooglePlaySubscription(purchaseToken, packageName, fallback
         currentPeriodEnd: expiryTime,
         nextBillingDate: expiryTime ? expiryTime.split('T')[0] : null,
         rawStatus: response.data?.subscriptionState || null,
+        ...storeInsight,
     };
 }
 
@@ -2328,6 +2521,21 @@ app.get('/api/admin/users', async (req, res) => {
                 stripeStatus: sub.stripeStatus || null,
                 appleStatus: sub.appleStatus || null,
                 googlePlayStatus: sub.googlePlayStatus || null,
+                entitlementActive: sub.entitlementActive ?? null,
+                storeProvider: sub.storeProvider || null,
+                storeStatus: sub.storeStatus || null,
+                storeRawStatus: sub.storeRawStatus || null,
+                storeStatusReason: sub.storeStatusReason || null,
+                storeStatusDetail: sub.storeStatusDetail || null,
+                storeAutoRenewEnabled: sub.storeAutoRenewEnabled ?? null,
+                storeAutoRenewStatus: sub.storeAutoRenewStatus ?? null,
+                storeExpirationIntent: sub.storeExpirationIntent ?? null,
+                storeCancelReason: sub.storeCancelReason || null,
+                storeCancelSurveyReason: sub.storeCancelSurveyReason || null,
+                storeGracePeriodExpiresAt: sub.storeGracePeriodExpiresAt || null,
+                storeBillingIssue: sub.storeBillingIssue ?? null,
+                storeAccessEndsAt: normalizeStoredDate(sub.storeAccessEndsAt || sub.accessEndsAt || null),
+                storeAccessEndsDate: sub.storeAccessEndsDate || sub.accessEndsDate || null,
                 trialStatus: sub.trialStatus || null,
                 trialDays: Number(sub.trialDays || 0) || null,
                 trialStartedAt,
@@ -2386,6 +2594,21 @@ app.get('/api/admin/users', async (req, res) => {
                     stripeStatus: null,
                     appleStatus: null,
                     googlePlayStatus: null,
+                    entitlementActive: null,
+                    storeProvider: null,
+                    storeStatus: null,
+                    storeRawStatus: null,
+                    storeStatusReason: null,
+                    storeStatusDetail: null,
+                    storeAutoRenewEnabled: null,
+                    storeAutoRenewStatus: null,
+                    storeExpirationIntent: null,
+                    storeCancelReason: null,
+                    storeCancelSurveyReason: null,
+                    storeGracePeriodExpiresAt: null,
+                    storeBillingIssue: null,
+                    storeAccessEndsAt: null,
+                    storeAccessEndsDate: null,
                     trialStatus: null,
                     trialDays: null,
                     trialStartedAt: null,
@@ -2593,6 +2816,19 @@ app.get('/api/admin/users/:uid/verify-payment', async (req, res) => {
                 trialStartedDate: appleResult.trialStartedDate,
                 trialEndsAt: appleResult.trialEndsAt,
                 trialEndsDate: appleResult.trialEndsDate,
+                entitlementActive: appleResult.entitlementActive,
+                storeProvider: appleResult.storeProvider,
+                storeStatus: appleResult.storeStatus,
+                storeRawStatus: appleResult.storeRawStatus,
+                storeStatusReason: appleResult.storeStatusReason,
+                storeStatusDetail: appleResult.storeStatusDetail,
+                storeAutoRenewEnabled: appleResult.storeAutoRenewEnabled,
+                storeAutoRenewStatus: appleResult.storeAutoRenewStatus,
+                storeExpirationIntent: appleResult.storeExpirationIntent,
+                storeGracePeriodExpiresAt: appleResult.storeGracePeriodExpiresAt,
+                storeBillingIssue: appleResult.storeBillingIssue,
+                storeAccessEndsAt: appleResult.storeAccessEndsAt,
+                storeAccessEndsDate: appleResult.storeAccessEndsDate,
             };
         } else if (provider === 'android') {
             const googleResult = await verifyGooglePlaySubscription(
@@ -2618,6 +2854,18 @@ app.get('/api/admin/users/:uid/verify-payment', async (req, res) => {
                 packageName: googleResult.packageName || null,
                 orderId: googleResult.orderId || null,
                 configured: googleResult.configured,
+                entitlementActive: googleResult.entitlementActive,
+                storeProvider: googleResult.storeProvider,
+                storeStatus: googleResult.storeStatus,
+                storeRawStatus: googleResult.storeRawStatus,
+                storeStatusReason: googleResult.storeStatusReason,
+                storeStatusDetail: googleResult.storeStatusDetail,
+                storeAutoRenewEnabled: googleResult.storeAutoRenewEnabled,
+                storeCancelReason: googleResult.storeCancelReason,
+                storeCancelSurveyReason: googleResult.storeCancelSurveyReason,
+                storeBillingIssue: googleResult.storeBillingIssue,
+                storeAccessEndsAt: googleResult.storeAccessEndsAt,
+                storeAccessEndsDate: googleResult.storeAccessEndsDate,
             };
         }
 
@@ -2752,6 +3000,7 @@ app.get('/api/admin/stats', async (req, res) => {
 
         // payingByUid: uid -> { provider, status, monthlyAmount }
         const payingByUid = new Map();
+        const storeUsersByUid = new Map();
         const providerErrors = [];
 
         const addPaying = (uid, provider, status, monthly, extra = {}) => {
@@ -2764,6 +3013,45 @@ app.get('/api/admin/stats', async (req, res) => {
                 status,
                 monthlyAmount: Number((monthly || 0).toFixed(2)),
                 ...extra,
+            });
+        };
+
+        const addStoreUser = (uid, provider, result = {}) => {
+            if (!uid) return;
+            if (!usersByUid.has(uid)) return;
+            storeUsersByUid.set(uid, {
+                uid,
+                provider,
+                status: result.status || null,
+                monthlyAmount: Number(result.monthlyAmount || 0),
+                verified: Boolean(result.verified),
+                paying: Boolean(result.paying),
+                entitlementActive: Boolean(result.entitlementActive),
+                storeProvider: result.storeProvider || provider,
+                storeStatus: result.storeStatus || result.status || null,
+                storeRawStatus: result.storeRawStatus || result.rawStatus || null,
+                storeStatusReason: result.storeStatusReason || null,
+                storeStatusDetail: result.storeStatusDetail || null,
+                storeAutoRenewEnabled: result.storeAutoRenewEnabled ?? null,
+                storeAutoRenewStatus: result.storeAutoRenewStatus ?? null,
+                storeExpirationIntent: result.storeExpirationIntent ?? null,
+                storeCancelReason: result.storeCancelReason || null,
+                storeCancelSurveyReason: result.storeCancelSurveyReason || null,
+                storeGracePeriodExpiresAt: result.storeGracePeriodExpiresAt || null,
+                storeBillingIssue: Boolean(result.storeBillingIssue),
+                storeAccessEndsAt: result.storeAccessEndsAt || result.currentPeriodEnd || null,
+                storeAccessEndsDate: result.storeAccessEndsDate || result.nextBillingDate || null,
+                currentPeriodEnd: result.currentPeriodEnd || result.storeAccessEndsAt || null,
+                nextBillingDate: result.nextBillingDate || result.storeAccessEndsDate || null,
+                appleStatus: provider === 'apple' ? (result.rawStatus || result.storeRawStatus || result.status || null) : null,
+                googlePlayStatus: provider === 'android' ? (result.rawStatus || result.storeRawStatus || result.status || null) : null,
+                trialStatus: result.trialStatus || (result.isTrialing ? 'trialing' : null),
+                trialDays: result.trialDays || null,
+                trialStartedAt: result.trialStartedAt || null,
+                trialStartedDate: result.trialStartedDate || null,
+                trialEndsAt: result.trialEndsAt || null,
+                trialEndsDate: result.trialEndsDate || null,
+                productId: result.productId || null,
             });
         };
 
@@ -2965,7 +3253,9 @@ app.get('/api/admin/stats', async (req, res) => {
                             billingCycle: user.billingCycle,
                             productId: user.productId,
                         });
+                        addStoreUser(user.uid, 'apple', result);
                         if (!result.paying && !result.isTrialing) continue;
+                        const { uid: _storeUid, provider: _storeProvider, monthlyAmount: _storeMonthly, ...storeExtra } = storeUsersByUid.get(user.uid) || {};
                         addPaying(user.uid, 'apple', result.status, result.monthlyAmount || 0, {
                             appleStatus: result.rawStatus || result.status,
                             originalTransactionId: result.originalTransactionId,
@@ -2978,6 +3268,7 @@ app.get('/api/admin/stats', async (req, res) => {
                             trialStartedDate: result.trialStartedDate,
                             trialEndsAt: result.trialEndsAt,
                             trialEndsDate: result.trialEndsDate,
+                            ...storeExtra,
                         });
                     } catch (error) {
                         failed++;
@@ -3016,7 +3307,9 @@ app.get('/api/admin/stats', async (req, res) => {
                                 productId: user.productId,
                             }
                         );
+                        addStoreUser(user.uid, 'android', result);
                         if (!result.paying) continue;
+                        const { uid: _storeUid, provider: _storeProvider, monthlyAmount: _storeMonthly, ...storeExtra } = storeUsersByUid.get(user.uid) || {};
                         addPaying(user.uid, 'android', result.status, result.monthlyAmount || 0, {
                             googlePlayStatus: result.rawStatus || result.status,
                             purchaseToken: result.purchaseToken,
@@ -3025,6 +3318,7 @@ app.get('/api/admin/stats', async (req, res) => {
                             orderId: result.orderId,
                             currentPeriodEnd: result.currentPeriodEnd,
                             nextBillingDate: result.nextBillingDate,
+                            ...storeExtra,
                         });
                     } catch (error) {
                         failed++;
@@ -3074,6 +3368,7 @@ app.get('/api/admin/stats', async (req, res) => {
             totalUsers: usersByUid.size,
             canceledStripeInMrrCount,
             payingUsers: Array.from(payingByUid.values()),
+            storeUsers: Array.from(storeUsersByUid.values()),
             providerErrors,
             isPartial: providerErrors.length > 0,
             generatedAt: new Date().toISOString(),
