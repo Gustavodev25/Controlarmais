@@ -97,6 +97,48 @@ function getProviderStatus(userItem: any): string {
   return normalizeValue(userItem.providerStatus || userItem.stripeStatus || userItem.appleStatus || userItem.googlePlayStatus || userItem.status || userItem.trialStatus);
 }
 
+function getStoreProviderKey(userItem: any): string {
+  const provider = normalizeProviderKey(userItem.provider || userItem.storeProvider);
+  if (provider && provider !== 'unknown') return provider;
+  if (userItem.googlePlayVerified === true || userItem.googlePurchaseTokenHash || userItem.googleSubscriptionState || userItem.googleLatestOrderId) return 'android';
+  if (userItem.appleOriginalTransactionId || userItem.appStoreOriginalTransactionId) return 'apple';
+  return provider;
+}
+
+function getStoreAutoRenewEnabled(userItem: any): boolean | null {
+  if (typeof userItem.storeAutoRenewEnabled === 'boolean') return userItem.storeAutoRenewEnabled;
+  const normalized = normalizeValue(userItem.storeAutoRenewStatus || userItem.autoRenewStatus || userItem.autoRenew);
+  if (['enabled', 'true', '1', 'on', 'active'].includes(normalized)) return true;
+  if (['disabled', 'false', '0', 'off', 'inactive'].includes(normalized)) return false;
+  return null;
+}
+
+function normalizeGooglePlayState(value: any): string {
+  return normalizeValue(value)
+    .replace(/^subscription_state_/, '')
+    .replace(/_/g, '-');
+}
+
+function isStoredGooglePlayVerified(userItem: any): boolean {
+  return userItem.googlePlayVerified === true &&
+    Boolean(userItem.googlePurchaseTokenHash || userItem.googleLatestOrderId || userItem.googleSubscriptionState);
+}
+
+function hasStoredVerifiedStoreEntitlement(userItem: any): boolean {
+  const provider = getStoreProviderKey(userItem);
+  if (provider === 'android' && !isStoredGooglePlayVerified(userItem)) return false;
+  if (!['apple', 'android'].includes(provider)) return false;
+
+  const status = getProviderStatus(userItem);
+  const reason = normalizeValue(userItem.storeStatusReason);
+  const hasActiveStatus = ['active', 'trial', 'trialing', 'billing_grace_period'].includes(status) ||
+    ['active', 'paid_active', 'trialing', 'trial_active', 'billing_grace_period'].includes(reason);
+  if (!hasActiveStatus) return false;
+
+  const accessDate = parseDateValue(getStoreAccessDate(userItem));
+  return !accessDate || accessDate.getTime() > Date.now();
+}
+
 function isTrialClient(userItem: any): boolean {
   return userItem.isVerified === true && (
     getProviderStatus(userItem) === 'trialing' ||
@@ -514,13 +556,13 @@ function renderStoreAwarenessModalRows(userItem: any): string {
   const info = getStoreAwarenessInfo(userItem);
   if (!info) return '';
 
-  const provider = providerName(normalizeProviderKey(userItem.provider || userItem.storeProvider));
+  const provider = providerName(getStoreProviderKey(userItem));
   const accessDate = getStoreAccessDate(userItem);
-  const autoRenew = userItem.storeAutoRenewEnabled;
+  const autoRenew = getStoreAutoRenewEnabled(userItem);
   const autoRenewLabel = autoRenew === true
     ? 'Ativa'
     : (autoRenew === false ? 'Desligada' : 'Nao informado');
-  const rawStatus = userItem.storeRawStatus || userItem.appleStatus || userItem.googlePlayStatus || userItem.storeStatus || '';
+  const rawStatus = userItem.storeRawStatus || userItem.appleStatus || userItem.googlePlayStatus || userItem.googleSubscriptionState || userItem.storeStatus || '';
 
   return `
       <div class="flex justify-between items-center gap-4 px-4 sm:px-8 py-3 border-b border-[var(--color-border)]/50">
@@ -808,16 +850,18 @@ function getStoreAccessDate(userItem: any): string | null {
     userItem.storeAccessEndsDate ||
     userItem.currentPeriodEnd ||
     userItem.nextBillingDate ||
+    userItem.renewalDate ||
+    userItem.expiresAt ||
     null;
 }
 
 function getStoreStatusReason(userItem: any): string {
-  const provider = normalizeProviderKey(userItem.provider || userItem.storeProvider);
+  const provider = getStoreProviderKey(userItem);
   const rawReason = normalizeValue(userItem.storeStatusReason);
   if (rawReason) return rawReason;
 
   const storeStatus = normalizeValue(userItem.storeStatus || userItem.providerStatus);
-  if (storeStatus === 'active' && userItem.storeAutoRenewEnabled === false) return 'auto_renew_disabled';
+  if (storeStatus === 'active' && getStoreAutoRenewEnabled(userItem) === false) return 'auto_renew_disabled';
   if (storeStatus) return storeStatus;
 
   if (provider === 'apple') {
@@ -831,16 +875,25 @@ function getStoreStatusReason(userItem: any): string {
   }
 
   if (provider === 'android') {
-    return normalizeValue(userItem.googlePlayStatus)
-      .replace(/^subscription_state_/, '')
-      .replace(/_/g, '-');
+    const providerStatus = getProviderStatus(userItem);
+    const googleState = normalizeGooglePlayState(userItem.googlePlayStatus || userItem.googleSubscriptionState);
+    if (isStoredGooglePlayVerified(userItem)) {
+      const accessDate = parseDateValue(getStoreAccessDate(userItem));
+      if (accessDate && accessDate.getTime() <= Date.now()) return 'expired';
+      if (providerStatus === 'trialing' || providerStatus === 'trial') return 'trialing';
+      if (googleState === 'active' && getStoreAutoRenewEnabled(userItem) === false) return 'auto_renew_disabled';
+      if (providerStatus === 'active') return 'paid_active';
+      if (googleState) return googleState;
+      return 'active';
+    }
+    return googleState;
   }
 
   return '';
 }
 
 function getStoreAwarenessInfo(userItem: any): StoreAwarenessInfo | null {
-  const provider = normalizeProviderKey(userItem.provider || userItem.storeProvider);
+  const provider = getStoreProviderKey(userItem);
   if (!['apple', 'android'].includes(provider)) return null;
 
   let reason = getStoreStatusReason(userItem);
@@ -849,7 +902,7 @@ function getStoreAwarenessInfo(userItem: any): StoreAwarenessInfo | null {
   const storeDetail = String(userItem.storeStatusDetail || '').trim();
 
   if (!reason && getTrialStatusKey(userItem) === 'expired') reason = 'expired';
-  if (!reason && userItem.storeAutoRenewEnabled === false) reason = 'auto_renew_disabled';
+  if (!reason && getStoreAutoRenewEnabled(userItem) === false) reason = 'auto_renew_disabled';
   if (!reason) {
     return {
       label: 'Loja pendente',
@@ -1574,6 +1627,12 @@ const STORE_STATUS_FIELDS = [
   'nextBillingDate',
   'appleStatus',
   'googlePlayStatus',
+  'googlePlayVerified',
+  'googlePurchaseTokenHash',
+  'googleLatestOrderId',
+  'googleBasePlanId',
+  'googleOfferId',
+  'googleSubscriptionState',
   'trialStatus',
   'trialDays',
   'trialStartedAt',
@@ -2635,6 +2694,7 @@ async function loadSubscriptions(): Promise<void> {
         if (storeInfo) {
           mergeStoreInfoIntoUser(u, storeInfo);
         }
+        const hasStoredVerifiedEntitlement = hasStoredVerifiedStoreEntitlement(u);
         if (info) {
           u.verificationUnavailable = false;
           u.isVerified = true;
@@ -2662,7 +2722,7 @@ async function loadSubscriptions(): Promise<void> {
           if (info.provider && u.provider !== info.provider) {
             u.provider = info.provider;
           }
-        } else if (hasProviderError(providerErrors, u.provider)) {
+        } else if (hasProviderError(providerErrors, u.provider) && !hasStoredVerifiedEntitlement) {
           u.verificationUnavailable = true;
           u.isVerified = undefined;
           u.isPaying = false;
@@ -2670,6 +2730,10 @@ async function loadSubscriptions(): Promise<void> {
         } else if (storeInfo) {
           u.verificationUnavailable = false;
           u.isPaying = Boolean(storeInfo.paying);
+        } else if (hasStoredVerifiedEntitlement) {
+          u.verificationUnavailable = false;
+          u.isVerified = true;
+          u.isPaying = getProviderStatus(u) === 'active';
         } else {
           u.verificationUnavailable = false;
           u.isVerified = false;
@@ -2684,6 +2748,12 @@ async function loadSubscriptions(): Promise<void> {
       // Marca provedores externos como verificacao pendente em caso de falha geral.
       allUsersGlobal.forEach((u: any) => {
         if (u.isVerified === undefined) {
+          if (hasStoredVerifiedStoreEntitlement(u)) {
+            u.verificationUnavailable = false;
+            u.isVerified = true;
+            u.isPaying = getProviderStatus(u) === 'active';
+            return;
+          }
           const isExternalProvider = isVerifiableProvider(u.provider);
           u.verificationUnavailable = isExternalProvider;
           u.isVerified = isExternalProvider ? undefined : false;

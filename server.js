@@ -262,6 +262,27 @@ function getGooglePlayPurchaseToken(data = {}, sub = {}) {
     );
 }
 
+async function resolveGooglePlayPurchaseToken(data = {}, sub = {}) {
+    const directToken = getGooglePlayPurchaseToken(data, sub);
+    if (directToken) return directToken;
+
+    const tokenHash = firstNonEmptyValue(
+        sub.googlePurchaseTokenHash,
+        data.googlePurchaseTokenHash,
+        data?.mobileSubscription?.googlePurchaseTokenHash,
+        data?.googlePlay?.purchaseTokenHash
+    );
+    if (!tokenHash || !db) return null;
+
+    try {
+        const mappingDoc = await db.collection('googlePlayPurchases').doc(String(tokenHash)).get();
+        return mappingDoc.exists ? mappingDoc.data()?.purchaseToken || null : null;
+    } catch (error) {
+        console.warn(`[Google Play] Falha ao resolver token pelo hash ${String(tokenHash).slice(0, 8)}...:`, error.message);
+        return null;
+    }
+}
+
 function getGooglePlayPackageName(data = {}, sub = {}) {
     return firstNonEmptyValue(
         sub.googlePlayPackageName,
@@ -280,6 +301,7 @@ function getMobileProviderFromData(data = {}, sub = {}) {
     if (provider !== 'unknown') return provider;
     if (getAppleOriginalTransactionId(data, sub)) return 'apple';
     if (getGooglePlayPurchaseToken(data, sub)) return 'android';
+    if (sub.googlePlayVerified === true || sub.googlePurchaseTokenHash || data.googlePurchaseTokenHash) return 'android';
     return 'unknown';
 }
 
@@ -709,6 +731,13 @@ function moneyToNumber(money = {}) {
     return units + nanos / 1000000000;
 }
 
+function getGoogleTrialOfferIds() {
+    return new Set([
+        process.env.GOOGLE_PLAY_TRIAL_OFFER_ID || 'trial-7d',
+        'pro-monthly-trial-7d',
+    ].filter(Boolean));
+}
+
 async function verifyGooglePlaySubscription(purchaseToken, packageName, fallback = {}) {
     const accessToken = await getGooglePlayAccessToken();
     if (!accessToken) {
@@ -742,12 +771,29 @@ async function verifyGooglePlaySubscription(purchaseToken, packageName, fallback
         latestLine,
         expiryTime,
     });
+    const offerId = latestLine?.offerDetails?.offerId || null;
+    const startTimeMs = response.data?.startTime ? new Date(response.data.startTime).getTime() : NaN;
+    const trialEndsMs = Number.isFinite(startTimeMs) && offerId && getGoogleTrialOfferIds().has(offerId)
+        ? startTimeMs + (7 * 24 * 60 * 60 * 1000)
+        : NaN;
+    const isTrialing = statusInfo.verified && Number.isFinite(trialEndsMs) && trialEndsMs > Date.now();
+    const effectiveStatus = isTrialing ? 'trialing' : statusInfo.status;
+    const effectivePaying = isTrialing ? false : statusInfo.paying;
+    const effectiveStoreInsight = isTrialing
+        ? {
+            ...storeInsight,
+            storeStatus: 'trialing',
+            storeStatusReason: 'trialing',
+            storeStatusDetail: 'Trial confirmado pela Google Play.',
+            entitlementActive: true,
+        }
+        : storeInsight;
 
     return {
         configured: true,
         verified: statusInfo.verified,
-        paying: statusInfo.paying,
-        status: statusInfo.status,
+        paying: effectivePaying,
+        status: effectiveStatus,
         monthlyAmount: amount,
         productId: latestLine.productId || fallback.productId || null,
         purchaseToken,
@@ -756,7 +802,14 @@ async function verifyGooglePlaySubscription(purchaseToken, packageName, fallback
         currentPeriodEnd: expiryTime,
         nextBillingDate: expiryTime ? expiryTime.split('T')[0] : null,
         rawStatus: response.data?.subscriptionState || null,
-        ...storeInsight,
+        isTrialing,
+        trialStatus: isTrialing ? 'trialing' : null,
+        trialDays: isTrialing ? 7 : null,
+        trialStartedAt: isTrialing ? new Date(startTimeMs).toISOString() : null,
+        trialStartedDate: isTrialing ? new Date(startTimeMs).toISOString().split('T')[0] : null,
+        trialEndsAt: isTrialing ? new Date(trialEndsMs).toISOString() : null,
+        trialEndsDate: isTrialing ? new Date(trialEndsMs).toISOString().split('T')[0] : null,
+        ...effectiveStoreInsight,
     };
 }
 
@@ -2462,9 +2515,32 @@ app.get('/api/admin/users', async (req, res) => {
             const canceledAt = normalizeStoredDate(sub.canceledAt || sub.canceledAtDate);
             const cancelAt = normalizeStoredDate(sub.cancelAt || sub.cancelAtDate);
             const endedAt = normalizeStoredDate(sub.endedAt || sub.endedAtDate);
-            const currentPeriodEnd = normalizeStoredDate(sub.currentPeriodEnd || sub.nextBillingDate);
+            const currentPeriodEnd = normalizeStoredDate(sub.currentPeriodEnd || sub.nextBillingDate || sub.renewalDate || sub.expiresAt);
             const signupDevice = inferSignupDevice(data);
-            const trialStartedAt = normalizeStoredDate(sub.trialStartedAt || sub.trialStart || sub.trial_start);
+            const isGooglePlayVerified = sub.googlePlayVerified === true;
+            const normalizedSubStatus = String(status || '').trim().toLowerCase();
+            const isStoreTrialing = normalizedSubStatus === 'trialing' || normalizedSubStatus === 'trial';
+            const isActiveStoreStatus = ['active', 'trialing', 'trial', 'billing_grace_period'].includes(normalizedSubStatus);
+            const storeAccessDate = currentPeriodEnd || normalizeStoredDate(sub.storeAccessEndsAt || sub.accessEndsAt || null);
+            const storeAccessMs = storeAccessDate ? new Date(storeAccessDate).getTime() : null;
+            const hasFutureStoreAccess = storeAccessMs ? storeAccessMs > Date.now() : false;
+            const hasVerifiedStoreAccess = isGooglePlayVerified && isActiveStoreStatus && (!storeAccessMs || hasFutureStoreAccess);
+            const effectiveStoredStatus = hasVerifiedStoreAccess ? normalizedSubStatus : (isGooglePlayVerified && storeAccessMs ? 'expired' : normalizedSubStatus);
+            const inferredStoreStatusReason = isGooglePlayVerified
+                ? (!hasVerifiedStoreAccess && storeAccessMs
+                    ? 'expired'
+                    : (isStoreTrialing ? 'trialing' : (normalizedSubStatus === 'active' ? 'paid_active' : normalizedSubStatus || null)))
+                : null;
+            const inferredStoreStatusDetail = isGooglePlayVerified
+                ? (!hasVerifiedStoreAccess && storeAccessMs
+                    ? 'Periodo de acesso informado pela Google Play expirou.'
+                    : (isStoreTrialing ? 'Trial confirmado pela Google Play.' : 'Assinatura confirmada pela Google Play.'))
+                : null;
+            const inferredStoreAutoRenewEnabled = sub.storeAutoRenewEnabled ??
+                (String(sub.autoRenewStatus || '').trim().toLowerCase() === 'enabled'
+                    ? true
+                    : (String(sub.autoRenewStatus || '').trim().toLowerCase() === 'disabled' ? false : null));
+            const trialStartedAt = normalizeStoredDate(sub.trialStartedAt || sub.trialStart || sub.trial_start || (isStoreTrialing ? sub.startedAt : null));
             const trialEndsAt = normalizeStoredDate(sub.trialEndsAt || sub.trialEnd || sub.trial_end);
             const firstPaidAt = normalizeStoredDate(sub.firstPaidAt || data.firstPaidAt || null);
             const convertedToPaidAt = normalizeStoredDate(sub.convertedToPaidAt || sub.firstPaidAt || data.firstPaidAt || null);
@@ -2518,25 +2594,37 @@ app.get('/api/admin/users', async (req, res) => {
                 googlePlayPurchaseToken,
                 androidPurchaseToken: googlePlayPurchaseToken,
                 googlePlayPackageName,
+                googlePlayVerified: isGooglePlayVerified,
+                googlePurchaseTokenHash: sub.googlePurchaseTokenHash || null,
+                googleLatestOrderId: sub.googleLatestOrderId || null,
+                googleBasePlanId: sub.googleBasePlanId || null,
+                googleOfferId: sub.googleOfferId || null,
+                googleSubscriptionState: sub.googleSubscriptionState || null,
                 stripeStatus: sub.stripeStatus || null,
                 appleStatus: sub.appleStatus || null,
-                googlePlayStatus: sub.googlePlayStatus || null,
-                entitlementActive: sub.entitlementActive ?? null,
-                storeProvider: sub.storeProvider || null,
-                storeStatus: sub.storeStatus || null,
-                storeRawStatus: sub.storeRawStatus || null,
-                storeStatusReason: sub.storeStatusReason || null,
-                storeStatusDetail: sub.storeStatusDetail || null,
-                storeAutoRenewEnabled: sub.storeAutoRenewEnabled ?? null,
+                googlePlayStatus: sub.googlePlayStatus || sub.googleSubscriptionState || null,
+                providerStatus: isGooglePlayVerified ? effectiveStoredStatus : null,
+                verifiedMonthlyAmount: hasVerifiedStoreAccess && !isStoreTrialing ? subscriptionMonthlyAmount : 0,
+                isVerified: hasVerifiedStoreAccess,
+                isPaying: hasVerifiedStoreAccess && normalizedSubStatus === 'active',
+                entitlementActive: sub.entitlementActive ?? hasVerifiedStoreAccess,
+                storeProvider: sub.storeProvider || (isGooglePlayVerified ? 'android' : null),
+                storeStatus: sub.storeStatus || (isGooglePlayVerified ? effectiveStoredStatus : null),
+                storeRawStatus: sub.storeRawStatus || sub.googleSubscriptionState || null,
+                storeStatusReason: sub.storeStatusReason || inferredStoreStatusReason,
+                storeStatusDetail: sub.storeStatusDetail || inferredStoreStatusDetail,
+                storeAutoRenewEnabled: inferredStoreAutoRenewEnabled,
                 storeAutoRenewStatus: sub.storeAutoRenewStatus ?? null,
                 storeExpirationIntent: sub.storeExpirationIntent ?? null,
                 storeCancelReason: sub.storeCancelReason || null,
                 storeCancelSurveyReason: sub.storeCancelSurveyReason || null,
                 storeGracePeriodExpiresAt: sub.storeGracePeriodExpiresAt || null,
                 storeBillingIssue: sub.storeBillingIssue ?? null,
-                storeAccessEndsAt: normalizeStoredDate(sub.storeAccessEndsAt || sub.accessEndsAt || null),
-                storeAccessEndsDate: sub.storeAccessEndsDate || sub.accessEndsDate || null,
-                trialStatus: sub.trialStatus || null,
+                storeAccessEndsAt: storeAccessDate,
+                storeAccessEndsDate: sub.storeAccessEndsDate || sub.accessEndsDate || (storeAccessDate ? storeAccessDate.split('T')[0] : null),
+                trialStatus: hasVerifiedStoreAccess
+                    ? (sub.trialStatus || (isStoreTrialing ? 'trialing' : null))
+                    : (isStoreTrialing || sub.trialStatus ? 'expired' : null),
                 trialDays: Number(sub.trialDays || 0) || null,
                 trialStartedAt,
                 trialStartedDate: sub.trialStartedDate || (trialStartedAt ? trialStartedAt.split('T')[0] : null),
@@ -2831,8 +2919,9 @@ app.get('/api/admin/users/:uid/verify-payment', async (req, res) => {
                 storeAccessEndsDate: appleResult.storeAccessEndsDate,
             };
         } else if (provider === 'android') {
+            const googlePlayPurchaseToken = await resolveGooglePlayPurchaseToken(data, sub);
             const googleResult = await verifyGooglePlaySubscription(
-                getGooglePlayPurchaseToken(data, sub),
+                googlePlayPurchaseToken,
                 getGooglePlayPackageName(data, sub),
                 {
                     amount: sub.nextAmount || sub.price || sub.amount || data.planPrice || data.valor,
@@ -2978,7 +3067,7 @@ app.get('/api/admin/stats', async (req, res) => {
             const data = doc.data();
             const sub = data.subscription || {};
             const appleOriginalTransactionId = getAppleOriginalTransactionId(data, sub);
-            const googlePlayPurchaseToken = getGooglePlayPurchaseToken(data, sub);
+            const googlePlayPurchaseToken = await resolveGooglePlayPurchaseToken(data, sub);
             const user = {
                 uid: doc.id,
                 activeDaysCount: Number(data.activeDaysCount) || 0,
@@ -3847,7 +3936,7 @@ async function computeActivePayingUids() {
         const data = doc.data();
         const sub = data.subscription || {};
         const appleOriginalTransactionId = getAppleOriginalTransactionId(data, sub);
-        const googlePlayPurchaseToken = getGooglePlayPurchaseToken(data, sub);
+        const googlePlayPurchaseToken = await resolveGooglePlayPurchaseToken(data, sub);
         const user = {
             uid: doc.id,
             stripeCustomerId: sub.stripeCustomerId || null,
@@ -3928,7 +4017,7 @@ async function computeActivePayingUids() {
                 billingCycle: user.billingCycle,
                 productId: user.productId,
             });
-            if (result.paying) payingUids.add(user.uid);
+            if (result.paying || result.entitlementActive || result.isTrialing) payingUids.add(user.uid);
         } catch (error) {
             console.warn(`[computeActivePayingUids] Falha ao consultar Apple uid=${user.uid}:`, error.response?.data || error.message);
         }
@@ -3946,7 +4035,7 @@ async function computeActivePayingUids() {
                     productId: user.productId,
                 }
             );
-            if (result.paying) payingUids.add(user.uid);
+            if (result.paying || result.entitlementActive || result.isTrialing) payingUids.add(user.uid);
         } catch (error) {
             console.warn(`[computeActivePayingUids] Falha ao consultar Google Play uid=${user.uid}:`, error.response?.data || error.message);
         }
