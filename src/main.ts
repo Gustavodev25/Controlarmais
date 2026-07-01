@@ -28,6 +28,7 @@ import { renderLanding, cleanupLanding } from './pages/Landing'
 import { getPublicLegalPageFromPath, renderLegalPage } from './pages/Legal'
 import { openTwoFactorPromoModal } from './components/TwoFactorPromoModal'
 import { renderUpdates } from './pages/Updates'
+import { onboarding } from './components/Onboarding'
 
 import { trackSession } from './lib/sessions'
 import { doc, getDoc, updateDoc } from 'firebase/firestore'
@@ -181,6 +182,8 @@ onAuthStateChanged(auth, async (user) => {
   if (user) {
     cleanupLanding();
     currentUser = user;
+    onboarding.init(user.uid);
+    onboarding.disableAutoTours();
     const urlParams = new URLSearchParams(window.location.search);
     const hasStripeReturnParams = urlParams.has('checkout') || urlParams.has('syncCredits') || urlParams.has('session_id');
     const redirectPending = sessionStorage.getItem('stripeSignupRedirectInProgress') === '1';
@@ -305,7 +308,9 @@ onAuthStateChanged(auth, async (user) => {
               setTimeout(() => openTwoFactorPromoModal(), 800);
             }
           }
+          onboarding.enableAutoTours(user.uid);
         } else if (userHasAsaasFootprint) {
+          onboarding.disableAutoTours();
           // Usuario com rastro de Asaas mas sem plan='pro' resolvido: libera o sistema
           // forcando-o a Settings → Plano para migrar pro Stripe. Toda outra navegacao
           // sera interceptada e redirecionada de volta para ca enquanto o flag estiver ativo.
@@ -320,6 +325,7 @@ onAuthStateChanged(auth, async (user) => {
             type: 'warning',
           });
         } else {
+          onboarding.disableAutoTours();
           clearAsaasMigrationFlag();
           // Passa userData (Firestore) para que isLegacyAsaasManagedUser funcione corretamente
           renderCheckout({ ...userData, uid: user.uid, email: user.email });
@@ -329,6 +335,7 @@ onAuthStateChanged(auth, async (user) => {
         if (redirectPending && setupPending && !hasStripeReturnParams) {
           renderLoading();
         } else {
+          onboarding.disableAutoTours();
           clearAsaasMigrationFlag();
           renderCheckout(user);
         }
@@ -340,6 +347,7 @@ onAuthStateChanged(auth, async (user) => {
       if (redirectPending && setupPending && !hasStripeReturnParams) {
         renderLoading();
       } else {
+        onboarding.disableAutoTours();
         renderCheckout(user);
       }
     }
@@ -354,8 +362,11 @@ onAuthStateChanged(auth, async (user) => {
     authManager.clearState();
     // Rastrear sessão
     trackSession(user.uid);
+    onboarding.setUser(user.uid);
+    onboarding.refreshSoon(350);
   } else {
     currentUser = null;
+    onboarding.hideForSignedOut();
     stopChangelogNotificationListener();
     // Se não há usuário logado, decide qual página pública renderizar
     handlePublicRouting();
@@ -427,6 +438,9 @@ window.addEventListener('app-navigate', (e: any) => {
 
       renderDashboard(currentUser, tab);
     }
+
+    onboarding.setUser(currentUser?.uid);
+    onboarding.refreshSoon(220);
   };
 
   if ((document as any).startViewTransition) {
