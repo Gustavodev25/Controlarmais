@@ -1541,13 +1541,15 @@ class ControlarOnboarding {
       targetRect = null;
     }
 
-    if (!targetRect) {
+    if (!targetRect || !target) {
       const x = Math.max(margin, (viewportWidth - panelWidth) / 2);
       const y = Math.max(margin, (viewportHeight - panelHeight) / 2);
       this.animatePanel(panel, x, y, animate);
       gsap.to([spotlight, beacon], { opacity: 0, duration: animate ? 0.18 : 0, ease: 'power1.out' });
       return;
     }
+
+    const targetTag = target.tagName.toLowerCase();
 
     const pad = viewportWidth < 640 ? 8 : 10;
     let spotX = targetRect.left - pad;
@@ -1557,14 +1559,14 @@ class ControlarOnboarding {
     let radius = Math.min(24, Math.max(14, spotH / 5));
 
     // Snap to edges for full-width or header/main elements to prevent bleeding
-    if (targetRect.width > viewportWidth * 0.9 || target.tagName.toLowerCase() === 'main' || target.tagName.toLowerCase() === 'header') {
+    if (targetRect.width > viewportWidth * 0.9 || targetTag === 'main' || targetTag === 'header') {
       spotX = 0;
       spotW = viewportWidth;
       radius = 0; // Square edges for layout blocks
     }
     
     // Snap to top if it's a header or touches the top
-    if (targetRect.top <= 10 || target.tagName.toLowerCase() === 'header') {
+    if (targetRect.top <= 10 || targetTag === 'header') {
       spotY = 0;
       spotH = targetRect.bottom;
       radius = 0;
